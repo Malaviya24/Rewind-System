@@ -1,13 +1,25 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Motor Repair Manager{% endblock %}
+{% block title %}Dashboard - {{ current_shop_settings.shop_name or 'Motor Repair Manager' }}{% endblock %}
 
 {% block content %}
 <section class="dashboard-command">
     <div class="dashboard-command-copy">
-        <p class="eyebrow">{{ period_filter.label }}</p>
-        <h1>Shop <span>Dashboard</span></h1>
-        <p>Monitor repair load, overdue work, pending payments, customers, workers, and daily cash flow from one control screen.</p>
+        <div class="dashboard-shop-brand">
+            <span class="dashboard-shop-logo">
+                {% if shop_settings.logo_filename %}
+                    <img src="{{ url_for('uploaded_file', filename=shop_settings.logo_filename) }}" alt="{{ shop_settings.shop_name }} logo">
+                {% else %}
+                    {{ (shop_settings.shop_name or 'MR')[:2]|upper }}
+                {% endif %}
+            </span>
+            <div>
+                <p class="eyebrow">{{ period_filter.label }}</p>
+                <h1>{{ shop_settings.shop_name or 'Motor Repair Manager' }}</h1>
+                <small>Dashboard / Shop Workboard</small>
+            </div>
+        </div>
+        <p>Monitor repair load, overdue work, pending payments, customers, and daily cash flow from one control screen.</p>
         <div class="dashboard-command-actions">
             <a class="button primary" href="{{ url_for('add_motor') }}">Add Motor</a>
             <a class="button ghost" href="{{ url_for('motors', filter='overdue') }}">Overdue Jobs</a>
@@ -115,11 +127,6 @@
         <strong>{{ stats.customer_count or 0 }}</strong>
         <small>Unique phone records</small>
     </article>
-    <article class="dashboard-kpi-card">
-        <span>Workers</span>
-        <strong>{{ workers_count or 0 }}</strong>
-        <small>Active staff</small>
-    </article>
 </section>
 
 <section class="dashboard-workspace" aria-label="Dashboard workspace">
@@ -127,7 +134,7 @@
         <div class="dashboard-panel-header">
             <div>
                 <span>Needs attention</span>
-                <h2>Today’s Watchlist</h2>
+                <h2>Needs Attention</h2>
             </div>
             <a href="{{ url_for('motors', filter='pending') }}">Open motors</a>
         </div>

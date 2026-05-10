@@ -12,9 +12,15 @@
     <header class="app-header">
         <div class="header-inner">
             <a class="brand" href="{{ url_for('dashboard') }}" aria-label="Dashboard">
-                <span class="brand-mark">MR</span>
+                <span class="brand-mark">
+                    {% if current_shop_settings.logo_filename %}
+                        <img src="{{ url_for('uploaded_file', filename=current_shop_settings.logo_filename) }}" alt="{{ current_shop_settings.shop_name }} logo">
+                    {% else %}
+                        {{ (current_shop_settings.shop_name or 'MR')[:2]|upper }}
+                    {% endif %}
+                </span>
                 <span>
-                    <strong>Motor Repair Manager</strong>
+                    <strong>{{ current_shop_settings.shop_name or 'Motor Repair Manager' }}</strong>
                     <small>Shop workboard</small>
                 </span>
             </a>

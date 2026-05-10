@@ -1,6 +1,6 @@
 import { getDatabase } from "./database";
 
-export const schemaVersion = 1;
+export const schemaVersion = 2;
 
 export async function migrate() {
   const db = await getDatabase();
@@ -100,6 +100,7 @@ export async function migrate() {
       worker_uuid TEXT NOT NULL,
       payment_date TEXT NOT NULL,
       amount REAL NOT NULL DEFAULT 0,
+      payment_type TEXT NOT NULL DEFAULT 'Paid',
       note TEXT NOT NULL DEFAULT '',
       device_id TEXT NOT NULL,
       sync_status TEXT NOT NULL DEFAULT 'local',
@@ -117,4 +118,9 @@ export async function migrate() {
 
     INSERT OR REPLACE INTO app_meta (key, value) VALUES ('schema_version', '${schemaVersion}');
   `);
+
+  const salaryColumns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(worker_salary_payments)");
+  if (!salaryColumns.some((column) => column.name === "payment_type")) {
+    await db.execAsync("ALTER TABLE worker_salary_payments ADD COLUMN payment_type TEXT NOT NULL DEFAULT 'Paid';");
+  }
 }

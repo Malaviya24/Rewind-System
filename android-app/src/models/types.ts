@@ -3,6 +3,7 @@ export type PaymentStatus = "Unpaid" | "Partial" | "Paid";
 export type AttendanceStatus = "Present" | "Leave" | "Absent";
 export type SyncStatus = "local" | "exported" | "imported";
 export type MediaType = "image" | "video";
+export type WorkerSalaryPaymentType = "Paid" | "Advance";
 
 export const repairStatuses: RepairStatus[] = [
   "Received",
@@ -106,6 +107,7 @@ export type WorkerSalaryPayment = {
   workerUuid: string;
   paymentDate: string;
   amount: number;
+  paymentType: WorkerSalaryPaymentType;
   note: string;
   deviceId: string;
   syncStatus: SyncStatus;
@@ -153,6 +155,16 @@ export type BackupData = {
   appMeta: Record<string, unknown>[];
 };
 
+export type BackupImportStats = {
+  customers: number;
+  motors: number;
+  workers: number;
+  attendance: number;
+  salaryPayments: number;
+  media: number;
+  appMeta: number;
+};
+
 export type DashboardSummary = {
   totalMotors: number;
   openRepairs: number;
@@ -167,13 +179,16 @@ export type DashboardSummary = {
 
 export type BackupManifest = {
   app: string;
-  backupType: "phone_export" | "phone_export_range";
-  appVersion: string;
-  schemaVersion: number;
-  deviceId: string;
+  appId?: string;
+  platform?: "android" | "pc";
+  backupType: "phone_export" | "phone_export_range" | "pc_export" | "pc_export_range";
+  appVersion?: string;
+  schemaVersion?: number;
+  deviceId?: string;
   createdAt: string;
   dateRange?: BackupRange;
   shop?: ShopSettings;
+  licenseIncluded?: boolean;
   counts: {
     motors: number;
     customers: number;

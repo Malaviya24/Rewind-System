@@ -1,4 +1,4 @@
-import { AttendanceStatus, BackupData, BackupRange, DashboardSummary, LicensePayload, Motor, MotorMedia, MotorWithMedia, PaymentStatus, RepairStatus, ShopSettings, StoredLicense, Worker, WorkerAttendanceRow, WorkerSalaryPayment } from "@/models/types";
+import { AttendanceStatus, BackupData, BackupImportStats, BackupRange, DashboardSummary, LicensePayload, Motor, MotorMedia, MotorWithMedia, PaymentStatus, RepairStatus, ShopSettings, StoredLicense, Worker, WorkerAttendanceRow, WorkerSalaryPayment, WorkerSalaryPaymentType } from "@/models/types";
 import { getDeviceId } from "@/services/device";
 import { monthBounds, nowIso, todayIso } from "@/utils/dates";
 import { createJobNumber, createUuid } from "@/utils/ids";
@@ -56,6 +56,10 @@ function mapMedia(row: Record<string, unknown>): MotorMedia {
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at)
   };
+}
+
+function normalizeSalaryPaymentType(value: unknown): WorkerSalaryPaymentType {
+  return value === "Advance" ? "Advance" : "Paid";
 }
 
 export async function getDashboardSummary(range?: BackupRange): Promise<DashboardSummary> {
@@ -344,12 +348,12 @@ export async function markAttendance(workerUuid: string, status: AttendanceStatu
   );
 }
 
-export async function saveWorkerSalaryPayment(workerUuid: string, amount: number, paymentDate = todayIso(), note = "") {
+export async function saveWorkerSalaryPayment(workerUuid: string, amount: number, paymentDate = todayIso(), note = "", paymentType: WorkerSalaryPaymentType = "Paid") {
   const now = nowIso();
   await run(
-    `INSERT INTO worker_salary_payments (uuid, worker_uuid, payment_date, amount, note, device_id, sync_status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'local', ?, ?)`,
-    [createUuid(), workerUuid, paymentDate, amount, note, await getDeviceId(), now, now]
+    `INSERT INTO worker_salary_payments (uuid, worker_uuid, payment_date, amount, payment_type, note, device_id, sync_status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'local', ?, ?)`,
+    [createUuid(), workerUuid, paymentDate, amount, normalizeSalaryPaymentType(paymentType), note, await getDeviceId(), now, now]
   );
 }
 
@@ -366,6 +370,7 @@ export async function listWorkerSalaryPaymentsForMonth(month = todayIso().slice(
     workerUuid: String(row.worker_uuid),
     paymentDate: String(row.payment_date),
     amount: Number(row.amount),
+    paymentType: normalizeSalaryPaymentType(row.payment_type),
     note: String(row.note),
     deviceId: String(row.device_id),
     syncStatus: "local",
@@ -570,11 +575,22 @@ export async function getBackupData(range?: BackupRange): Promise<BackupData> {
   };
 }
 
-export async function importBackupData(data: BackupData) {
+export async function importBackupData(data: BackupData): Promise<BackupImportStats> {
+  const stats: BackupImportStats = {
+    customers: 0,
+    motors: 0,
+    workers: 0,
+    attendance: 0,
+    salaryPayments: 0,
+    media: 0,
+    appMeta: 0
+  };
+
   for (const row of data.appMeta || []) {
     const key = String(row.key || "");
     if (key === "shop_name" || key === "shop_logo_uri") {
       await setAppMeta(key, String(row.value || ""));
+      stats.appMeta += 1;
     }
   }
 
@@ -600,6 +616,7 @@ export async function importBackupData(data: BackupData) {
         String(row.updated_at || nowIso())
       ]
     );
+    stats.customers += 1;
   }
 
   for (const row of data.motors || []) {
@@ -643,6 +660,7 @@ export async function importBackupData(data: BackupData) {
         String(row.updated_at || nowIso())
       ]
     );
+    stats.motors += 1;
   }
 
   for (const row of data.motorMedia || []) {
@@ -670,6 +688,7 @@ export async function importBackupData(data: BackupData) {
         String(row.updated_at || nowIso())
       ]
     );
+    stats.media += 1;
   }
 
   for (const row of data.workers || []) {
@@ -696,6 +715,7 @@ export async function importBackupData(data: BackupData) {
         String(row.updated_at || nowIso())
       ]
     );
+    stats.workers += 1;
   }
 
   for (const row of data.workerAttendance || []) {
@@ -718,29 +738,42 @@ export async function importBackupData(data: BackupData) {
         String(row.updated_at || nowIso())
       ]
     );
+    stats.attendance += 1;
   }
 
   for (const row of data.workerSalaryPayments || []) {
     await run(
-      `INSERT OR IGNORE INTO worker_salary_payments (uuid, worker_uuid, payment_date, amount, note, device_id, sync_status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'imported', ?, ?)`,
+      `INSERT INTO worker_salary_payments (uuid, worker_uuid, payment_date, amount, payment_type, note, device_id, sync_status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'imported', ?, ?)
+       ON CONFLICT(uuid) DO UPDATE SET
+        worker_uuid = excluded.worker_uuid,
+        payment_date = excluded.payment_date,
+        amount = excluded.amount,
+        payment_type = excluded.payment_type,
+        note = excluded.note,
+        sync_status = 'imported',
+        updated_at = excluded.updated_at`,
       [
         String(row.uuid),
         String(row.worker_uuid || ""),
         String(row.payment_date || todayIso()),
         Number(row.amount || 0),
+        normalizeSalaryPaymentType(row.payment_type),
         String(row.note || ""),
         String(row.device_id || (await getDeviceId())),
         String(row.created_at || nowIso()),
         String(row.updated_at || nowIso())
       ]
     );
+    stats.salaryPayments += 1;
   }
 
   const customerUuids = Array.from(new Set([...(data.customers || []).map((row) => String(row.uuid)), ...(data.motors || []).map((row) => String(row.customer_uuid))]));
   for (const customerUuid of customerUuids.filter(Boolean)) {
     await refreshCustomerRollup(customerUuid);
   }
+
+  return stats;
 }
 
 async function getAppMeta(key: string) {

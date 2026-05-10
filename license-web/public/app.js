@@ -7,6 +7,8 @@ const copyButton = document.getElementById("copyButton");
 const generateButton = document.getElementById("generateButton");
 const adminTokenField = document.getElementById("adminToken");
 const deviceIdField = document.getElementById("deviceId");
+const platformField = document.getElementById("platform");
+const testDeviceButton = document.getElementById("testDeviceButton");
 
 adminTokenField.value = sessionStorage.getItem("rewindLicenseAdminToken") || "";
 
@@ -27,10 +29,25 @@ function showPayload(payload) {
 }
 
 function normalizeDeviceCode() {
-  deviceIdField.value = deviceIdField.value.trim().toUpperCase().replace(/\s+/g, "");
+  const raw = deviceIdField.value.trim().toUpperCase();
+  const match = raw.match(/\bRWND(?:-PC)?-[A-Z0-9]{4}(?:-[A-Z0-9]{4}){5}\b/);
+  deviceIdField.value = (match ? match[0] : raw).replace(/\s+/g, "");
 }
 
 deviceIdField.addEventListener("blur", normalizeDeviceCode);
+
+function createTestDeviceCode(platform) {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+  const groups = hex.match(/.{1,4}/g).slice(0, 6).join("-");
+  return platform === "pc" ? `RWND-PC-${groups}` : `RWND-${groups}`;
+}
+
+testDeviceButton.addEventListener("click", () => {
+  deviceIdField.value = createTestDeviceCode(platformField.value);
+  setMessage("Test device code created. Use real customer device code for production.", "success");
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

@@ -20,7 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(removeToast, 4200);
     });
 
-    const imageInput = document.querySelector("#image");
+    const imageInput = document.querySelector("#image:not([data-logo-input])");
     const preview = document.querySelector("[data-image-preview]");
 
     if (imageInput && preview) {
@@ -35,6 +35,162 @@ document.addEventListener("DOMContentLoaded", () => {
             image.src = URL.createObjectURL(file);
             image.onload = () => URL.revokeObjectURL(image.src);
             preview.replaceChildren(image);
+        });
+    }
+
+    const logoInput = document.querySelector("[data-logo-input]");
+    const logoPreview = document.querySelector("[data-image-preview]");
+    const logoCropOutput = document.querySelector("[data-logo-crop-output]");
+    const logoCropModal = document.querySelector("[data-logo-crop-modal]");
+    if (logoInput && logoPreview && logoCropOutput && logoCropModal) {
+        const stage = logoCropModal.querySelector("[data-logo-crop-stage]");
+        const cropImage = logoCropModal.querySelector("[data-logo-crop-image]");
+        const zoomInput = logoCropModal.querySelector("[data-logo-crop-zoom]");
+        const applyButton = logoCropModal.querySelector("[data-logo-crop-apply]");
+        const cancelButtons = logoCropModal.querySelectorAll("[data-logo-crop-cancel]");
+        let objectUrl = "";
+        let naturalWidth = 0;
+        let naturalHeight = 0;
+        let baseWidth = 0;
+        let baseHeight = 0;
+        let offsetX = 0;
+        let offsetY = 0;
+        let dragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let startOffsetX = 0;
+        let startOffsetY = 0;
+
+        const closeCropper = () => {
+            logoCropModal.hidden = true;
+            document.body.classList.remove("logo-crop-open");
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+                objectUrl = "";
+            }
+        };
+
+        const cropSize = () => Math.min(stage?.clientWidth || 320, stage?.clientHeight || 320);
+
+        const clampOffsets = () => {
+            const size = cropSize();
+            const zoom = Number(zoomInput?.value || 1);
+            const width = baseWidth * zoom;
+            const height = baseHeight * zoom;
+            const limitX = Math.max(0, (width - size) / 2);
+            const limitY = Math.max(0, (height - size) / 2);
+            offsetX = Math.min(limitX, Math.max(-limitX, offsetX));
+            offsetY = Math.min(limitY, Math.max(-limitY, offsetY));
+        };
+
+        const updateCropImage = () => {
+            if (!cropImage) {
+                return;
+            }
+            clampOffsets();
+            const zoom = Number(zoomInput?.value || 1);
+            cropImage.style.width = `${baseWidth}px`;
+            cropImage.style.height = `${baseHeight}px`;
+            cropImage.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
+        };
+
+        logoInput.addEventListener("change", () => {
+            const file = logoInput.files && logoInput.files[0];
+            if (!file || !cropImage || !stage || !zoomInput) {
+                return;
+            }
+            if (!file.type.startsWith("image/")) {
+                return;
+            }
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+            objectUrl = URL.createObjectURL(file);
+            cropImage.onload = () => {
+                naturalWidth = cropImage.naturalWidth;
+                naturalHeight = cropImage.naturalHeight;
+                const size = cropSize();
+                const coverScale = Math.max(size / naturalWidth, size / naturalHeight);
+                baseWidth = naturalWidth * coverScale;
+                baseHeight = naturalHeight * coverScale;
+                offsetX = 0;
+                offsetY = 0;
+                zoomInput.value = "1";
+                updateCropImage();
+            };
+            cropImage.src = objectUrl;
+            logoCropOutput.value = "";
+            logoCropModal.hidden = false;
+            document.body.classList.add("logo-crop-open");
+        });
+
+        zoomInput?.addEventListener("input", updateCropImage);
+
+        stage?.addEventListener("pointerdown", (event) => {
+            dragging = true;
+            dragStartX = event.clientX;
+            dragStartY = event.clientY;
+            startOffsetX = offsetX;
+            startOffsetY = offsetY;
+            stage.setPointerCapture(event.pointerId);
+        });
+
+        stage?.addEventListener("pointermove", (event) => {
+            if (!dragging) {
+                return;
+            }
+            offsetX = startOffsetX + event.clientX - dragStartX;
+            offsetY = startOffsetY + event.clientY - dragStartY;
+            updateCropImage();
+        });
+
+        const stopDragging = (event) => {
+            dragging = false;
+            try {
+                stage?.releasePointerCapture(event.pointerId);
+            } catch {
+                // Pointer may already be released by the browser.
+            }
+        };
+        stage?.addEventListener("pointerup", stopDragging);
+        stage?.addEventListener("pointercancel", stopDragging);
+
+        applyButton?.addEventListener("click", () => {
+            if (!cropImage || !naturalWidth || !naturalHeight) {
+                return;
+            }
+            const size = cropSize();
+            const zoom = Number(zoomInput?.value || 1);
+            const displayedWidth = baseWidth * zoom;
+            const displayedHeight = baseHeight * zoom;
+            const imageLeft = size / 2 + offsetX - displayedWidth / 2;
+            const imageTop = size / 2 + offsetY - displayedHeight / 2;
+            const sx = Math.max(0, (-imageLeft / displayedWidth) * naturalWidth);
+            const sy = Math.max(0, (-imageTop / displayedHeight) * naturalHeight);
+            const sw = Math.min(naturalWidth - sx, (size / displayedWidth) * naturalWidth);
+            const sh = Math.min(naturalHeight - sy, (size / displayedHeight) * naturalHeight);
+            const canvas = document.createElement("canvas");
+            canvas.width = 512;
+            canvas.height = 512;
+            const context = canvas.getContext("2d");
+            context.fillStyle = "#ffffff";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(cropImage, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL("image/png");
+            logoCropOutput.value = dataUrl;
+
+            const previewImage = document.createElement("img");
+            previewImage.alt = "Cropped shop logo";
+            previewImage.src = dataUrl;
+            logoPreview.replaceChildren(previewImage);
+            closeCropper();
+        });
+
+        cancelButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                logoInput.value = "";
+                closeCropper();
+            });
         });
     }
 
@@ -168,6 +324,90 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     });
+
+    const attendanceModal = document.querySelector("[data-attendance-modal]");
+    const attendanceForm = attendanceModal?.querySelector("[data-attendance-form]");
+    if (attendanceModal && attendanceForm) {
+        const workerNode = attendanceModal.querySelector("[data-attendance-worker]");
+        const dateLabelNode = attendanceModal.querySelector("[data-attendance-date-label]");
+        const dateInput = attendanceModal.querySelector("[data-attendance-date]");
+        const statusInput = attendanceModal.querySelector("[data-attendance-status]");
+        const noteInput = attendanceModal.querySelector("[data-attendance-note]");
+
+        const closeAttendanceModal = () => {
+            attendanceModal.hidden = true;
+            document.body.classList.remove("attendance-modal-open");
+        };
+
+        document.querySelectorAll("[data-attendance-open]").forEach((button) => {
+            button.addEventListener("click", () => {
+                attendanceForm.action = button.dataset.action || "";
+                if (workerNode) {
+                    workerNode.textContent = button.dataset.worker || "Worker";
+                }
+                if (dateLabelNode) {
+                    dateLabelNode.textContent = button.dataset.dateLabel || button.dataset.date || "Selected date";
+                }
+                if (dateInput) {
+                    dateInput.value = button.dataset.date || "";
+                }
+                if (statusInput) {
+                    statusInput.value = button.dataset.status || "Unmarked";
+                }
+                if (noteInput) {
+                    noteInput.value = button.dataset.note || "";
+                }
+                attendanceModal.hidden = false;
+                document.body.classList.add("attendance-modal-open");
+                noteInput?.focus();
+            });
+        });
+
+        attendanceModal.querySelectorAll("[data-attendance-close]").forEach((button) => {
+            button.addEventListener("click", closeAttendanceModal);
+        });
+        attendanceModal.querySelectorAll("[data-attendance-pick]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (statusInput) {
+                    statusInput.value = button.dataset.attendancePick || "Unmarked";
+                }
+            });
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && !attendanceModal.hidden) {
+                closeAttendanceModal();
+            }
+        });
+    }
+
+    const settingsShell = document.querySelector("[data-settings-shell]");
+    if (settingsShell) {
+        const buttons = Array.from(settingsShell.querySelectorAll("[data-settings-tab-button]"));
+        const panels = Array.from(settingsShell.querySelectorAll("[data-settings-panel]"));
+        const setSettingsTab = (target) => {
+            buttons.forEach((button) => {
+                button.classList.toggle("active", button.dataset.settingsTabButton === target);
+            });
+            panels.forEach((panel) => {
+                const active = panel.dataset.settingsPanel === target;
+                panel.classList.toggle("active", active);
+                panel.hidden = !active;
+            });
+            if (target) {
+                window.history.replaceState(null, "", `#${target}`);
+            }
+        };
+
+        buttons.forEach((button) => {
+            button.addEventListener("click", () => {
+                setSettingsTab(button.dataset.settingsTabButton || "shop");
+            });
+        });
+
+        const initialTab = window.location.hash.replace("#", "") || "shop";
+        const hasInitialTab = buttons.some((button) => button.dataset.settingsTabButton === initialTab);
+        setSettingsTab(hasInitialTab ? initialTab : "shop");
+    }
 
     const reminderRoot = document.querySelector("[data-desktop-reminders]");
     if (reminderRoot && "Notification" in window) {

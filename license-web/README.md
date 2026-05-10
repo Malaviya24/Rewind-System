@@ -56,10 +56,14 @@ Vercel serves the static website from `public/` and the license signing endpoint
 1. Open the deployed Vercel website.
 2. Enter the admin token.
 3. Select `Android app` or `PC software`.
-4. Paste the device code from the activation screen.
+4. Paste the device code from the activation screen. You may paste only the code or the full shared text, for example `Device Code: RWND-...`.
 5. Enter shop/customer name.
 6. Click `Generate License`.
 7. Copy the generated license into the Android app or PC software.
+
+For UI testing only, use `Create Test Device Code`. Do not use that generated test code for a real customer because it will not match their phone or PC.
+
+If the website says the server private key is invalid, recreate the Vercel `LICENSE_PRIVATE_KEY_BASE64` value from the production private key and redeploy.
 
 ## Notes
 

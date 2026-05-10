@@ -105,6 +105,13 @@ label span {
   text-transform: uppercase;
 }
 
+label small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 input,
 select,
 textarea {
@@ -174,6 +181,10 @@ button:disabled {
 
 .secondary:hover {
   background: #fff5f7;
+}
+
+.inline-action {
+  align-self: end;
 }
 
 #generateButton {

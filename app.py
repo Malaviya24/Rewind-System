@@ -408,6 +408,7 @@ def ensure_phone_import_tables(db):
             worker_id INTEGER NOT NULL,
             payment_date TEXT NOT NULL,
             amount REAL NOT NULL DEFAULT 0,
+            payment_type TEXT NOT NULL DEFAULT 'Paid',
             note TEXT,
             source_device_id TEXT,
             created_at TEXT NOT NULL,
@@ -416,6 +417,7 @@ def ensure_phone_import_tables(db):
         )
         """
     )
+    add_column_if_missing(db, "worker_salary_payments", "payment_type", "TEXT NOT NULL DEFAULT 'Paid'")
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_motors_phone_uuid ON motors(phone_uuid)")
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_phone_uuid ON workers(phone_uuid)")
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_phone_uuid ON worker_attendance(phone_uuid)")
@@ -725,6 +727,7 @@ def inject_template_helpers():
     return {
         "csrf_token": session.get("_csrf_token", ""),
         "asset_url": asset_url,
+        "current_shop_settings": dict(get_shop_settings()),
         "repair_statuses": REPAIR_STATUSES,
         "payment_statuses": PAYMENT_STATUSES,
         "attendance_statuses": ATTENDANCE_STATUSES,
@@ -855,6 +858,10 @@ def allowed_extension(filename, allowed_extensions=ALLOWED_EXTENSIONS):
 def has_valid_image_signature(file_storage):
     header = file_storage.stream.read(32)
     file_storage.stream.seek(0)
+    return has_valid_image_bytes(header)
+
+
+def has_valid_image_bytes(header):
     if header.startswith(b"\xff\xd8\xff"):
         return True
     if header.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -921,6 +928,31 @@ def save_upload(file_storage):
     extension = original_name.rsplit(".", 1)[1].lower()
     filename = f"{uuid.uuid4().hex}.{extension}"
     file_storage.save(UPLOAD_FOLDER / filename)
+    return filename
+
+
+def save_logo_data_url(data_url, errors):
+    data_url = (data_url or "").strip()
+    if not data_url:
+        return None
+    match = re.fullmatch(r"data:image/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)", data_url)
+    if not match:
+        errors.append("Cropped logo data is not a valid image.")
+        return None
+    extension = "jpg" if match.group(1) == "jpeg" else match.group(1)
+    try:
+        image_bytes = base64.b64decode(match.group(2), validate=True)
+    except (binascii.Error, ValueError):
+        errors.append("Cropped logo data could not be decoded.")
+        return None
+    if len(image_bytes) > MAX_UPLOAD_SIZE:
+        errors.append("Cropped logo is too large.")
+        return None
+    if not has_valid_image_bytes(image_bytes[:32]):
+        errors.append("Cropped logo is not a valid image.")
+        return None
+    filename = f"{uuid.uuid4().hex}.{extension}"
+    (UPLOAD_FOLDER / filename).write_bytes(image_bytes)
     return filename
 
 
@@ -1305,6 +1337,7 @@ def build_worker_month_context(attendance_month=None):
     prev_month = (month_start - timedelta(days=1)).replace(day=1).strftime("%Y-%m")
     next_month = (month_end + timedelta(days=1)).replace(day=1).strftime("%Y-%m")
     today = today_date.isoformat()
+    month_leading_blanks = (month_start.weekday() + 1) % 7
 
     db = get_db()
     worker_rows = [
@@ -1367,7 +1400,7 @@ def build_worker_month_context(attendance_month=None):
             dict(row)
             for row in db.execute(
                 f"""
-                SELECT id, worker_id, payment_date, amount, note
+                SELECT id, worker_id, payment_date, amount, payment_type, note
                 FROM worker_salary_payments
                 WHERE worker_id IN ({placeholders})
                     AND payment_date BETWEEN ? AND ?
@@ -1405,7 +1438,16 @@ def build_worker_month_context(attendance_month=None):
         row["salary_earned"] = present_days * daily_salary
         row["salary_deducted"] = (leave_days + absent_days) * daily_salary
         row["salary_paid"] = salary_payment_map.get(row["id"], {}).get("total", 0)
-        row["salary_balance"] = max(row["salary_earned"] - row["salary_paid"], 0)
+        row["salary_balance"] = row["salary_earned"] - row["salary_paid"]
+        if row["salary_balance"] < 0:
+            row["salary_balance_label"] = "Advance extra"
+            row["salary_balance_slug"] = "advance-extra"
+        elif row["salary_balance"] > 0:
+            row["salary_balance_label"] = "To pay"
+            row["salary_balance_slug"] = "to-pay"
+        else:
+            row["salary_balance_label"] = "Settled"
+            row["salary_balance_slug"] = "settled"
         row["salary_payments"] = salary_payment_map.get(row["id"], {}).get("records", [])[:3]
         row["today_salary"] = daily_salary if row["today_status"] == "Present" else 0
 
@@ -1485,6 +1527,7 @@ def build_worker_month_context(attendance_month=None):
         "prev_month": prev_month,
         "next_month": next_month,
         "month_days": month_days,
+        "month_leading_blanks": month_leading_blanks,
         "today": today,
         "worker_rows": worker_rows,
         "worker_summary": worker_summary,
@@ -1633,7 +1676,6 @@ def dashboard():
         """,
         (today, today, today, *params),
     ).fetchone()
-    workers_count = get_db().execute("SELECT COUNT(*) AS count FROM workers WHERE active = 1").fetchone()["count"]
     recent_motors = get_db().execute(
         f"SELECT * FROM motors {where_clause} ORDER BY id DESC LIMIT 6",
         params,
@@ -1679,7 +1721,7 @@ def dashboard():
     return render_template(
         "dashboard.html",
         stats=stats,
-        workers_count=workers_count,
+        shop_settings=dict(get_shop_settings()),
         recent_motors=recent_motors,
         overdue_motors=overdue_motors,
         pending_payment_motors=pending_payment_motors,
@@ -1917,11 +1959,21 @@ def edit_motor(motor_id):
 def update_motor_payment(motor_id):
     motor = dict(get_motor_or_404(motor_id))
     requested_status = (request.form.get("payment_status") or "").strip()
-    if requested_status not in {"Paid", "Unpaid"}:
+    if requested_status not in PAYMENT_STATUSES:
         flash("Choose a valid payment status.", "error")
         return redirect(request.referrer or url_for("motors"))
 
-    paid_amount = repair_amount(motor) if requested_status == "Paid" else 0
+    amount = repair_amount(motor)
+    current_paid = Decimal(str(motor.get("advance_paid") or 0))
+    if requested_status == "Paid":
+        paid_amount = float(amount)
+    elif requested_status == "Unpaid":
+        paid_amount = 0
+    else:
+        if amount <= 0 or current_paid <= 0 or current_paid >= Decimal(str(amount)):
+            flash("Set a valid advance paid amount in Edit before marking payment partial.", "error")
+            return redirect(request.referrer or url_for("motors"))
+        paid_amount = float(current_paid)
     get_db().execute(
         """
         UPDATE motors
@@ -2203,13 +2255,51 @@ def delete_invoice(invoice_id):
 
 @app.route("/customers")
 def customers():
+    today = date.today().isoformat()
     search = (request.args.get("q") or "").strip()
     selected_phone = (request.args.get("phone") or "").strip()
-    filters = ["deleted_at IS NULL"]
+    status_filter = (request.args.get("status") or "all").strip()
+    payment_filter = (request.args.get("payment") or "all").strip()
+    filters = ["m.deleted_at IS NULL"]
     params = []
     if search:
-        filters.append("(customer_name LIKE ? OR phone_number LIKE ?)")
+        filters.append("(m.customer_name LIKE ? OR m.phone_number LIKE ?)")
         params.extend([f"%{search}%", f"%{search}%"])
+
+    match_filters = ["m2.deleted_at IS NULL", "m2.phone_number = m.phone_number"]
+    match_params = []
+    if status_filter == "open":
+        match_filters.append(f"m2.status NOT IN ({sql_values(WORK_DONE_STATUSES)})")
+    elif status_filter == "done":
+        match_filters.append(f"m2.status IN ({sql_values(WORK_DONE_STATUSES)})")
+    elif status_filter == "overdue":
+        match_filters.append(f"m2.status NOT IN ({sql_values(WORK_DONE_STATUSES)}) AND m2.deadline_date < ?")
+        match_params.append(today)
+    elif status_filter in REPAIR_STATUSES:
+        match_filters.append("m2.status = ?")
+        match_params.append(status_filter)
+    else:
+        status_filter = "all"
+
+    if payment_filter == "pending":
+        match_filters.append(
+            "(m2.payment_status != 'Paid' OR (CASE WHEN m2.final_cost > 0 THEN m2.final_cost ELSE m2.estimated_cost END) > m2.advance_paid)"
+        )
+    elif payment_filter in PAYMENT_STATUSES:
+        match_filters.append("m2.payment_status = ?")
+        match_params.append(payment_filter)
+    elif payment_filter == "unpaid":
+        payment_filter = "pending"
+        match_filters.append(
+            "(m2.payment_status != 'Paid' OR (CASE WHEN m2.final_cost > 0 THEN m2.final_cost ELSE m2.estimated_cost END) > m2.advance_paid)"
+        )
+    else:
+        payment_filter = "all"
+
+    if status_filter != "all" or payment_filter != "all":
+        filters.append(f"EXISTS (SELECT 1 FROM motors m2 WHERE {' AND '.join(match_filters)})")
+        params.extend(match_params)
+
     where_clause = f"WHERE {' AND '.join(filters)}"
 
     customer_rows = [
@@ -2218,19 +2308,25 @@ def customers():
         .execute(
         f"""
         SELECT
-            phone_number,
-            MAX(customer_name) AS customer_name,
+            m.phone_number,
+            MAX(m.customer_name) AS customer_name,
             COUNT(*) AS total_jobs,
-            MAX(date_added) AS last_repair_date,
-            COALESCE(SUM(CASE WHEN final_cost > 0 THEN final_cost ELSE estimated_cost END), 0) AS total_value,
-            COALESCE(SUM(advance_paid), 0) AS total_paid,
-            COALESCE(SUM(CASE WHEN (CASE WHEN final_cost > 0 THEN final_cost ELSE estimated_cost END) > advance_paid THEN (CASE WHEN final_cost > 0 THEN final_cost ELSE estimated_cost END) - advance_paid ELSE 0 END), 0) AS balance_due
-        FROM motors
+            SUM(CASE WHEN m.status NOT IN ({sql_values(WORK_DONE_STATUSES)}) THEN 1 ELSE 0 END) AS open_jobs,
+            SUM(CASE WHEN m.status IN ({sql_values(WORK_DONE_STATUSES)}) THEN 1 ELSE 0 END) AS completed_jobs,
+            SUM(CASE WHEN m.status NOT IN ({sql_values(WORK_DONE_STATUSES)}) AND m.deadline_date < ? THEN 1 ELSE 0 END) AS overdue_jobs,
+            SUM(CASE WHEN m.payment_status = 'Paid' THEN 1 ELSE 0 END) AS paid_jobs,
+            SUM(CASE WHEN m.payment_status = 'Partial' THEN 1 ELSE 0 END) AS partial_jobs,
+            SUM(CASE WHEN m.payment_status = 'Unpaid' THEN 1 ELSE 0 END) AS unpaid_jobs,
+            MAX(m.date_added) AS last_repair_date,
+            COALESCE(SUM(CASE WHEN m.final_cost > 0 THEN m.final_cost ELSE m.estimated_cost END), 0) AS total_value,
+            COALESCE(SUM(m.advance_paid), 0) AS total_paid,
+            COALESCE(SUM(CASE WHEN (CASE WHEN m.final_cost > 0 THEN m.final_cost ELSE m.estimated_cost END) > m.advance_paid THEN (CASE WHEN m.final_cost > 0 THEN m.final_cost ELSE m.estimated_cost END) - m.advance_paid ELSE 0 END), 0) AS balance_due
+        FROM motors m
         {where_clause}
-        GROUP BY phone_number
+        GROUP BY m.phone_number
         ORDER BY last_repair_date DESC, customer_name ASC
         """,
-        params,
+        (today, *params),
         )
         .fetchall()
     ]
@@ -2243,30 +2339,16 @@ def customers():
     }
     selected_customer = next((row for row in customer_rows if row["phone_number"] == selected_phone), None)
 
-    history = []
-    if selected_phone:
-        history = [
-            dict(row)
-            for row in get_db()
-            .execute(
-            """
-            SELECT * FROM motors
-            WHERE deleted_at IS NULL AND phone_number = ?
-            ORDER BY date_added DESC, id DESC
-            """,
-            (selected_phone,),
-            )
-            .fetchall()
-        ]
-
     return render_template(
         "customers.html",
         customers=customer_rows,
         customer_summary=customer_summary,
         selected_customer=selected_customer,
-        history=history,
         search=search,
         selected_phone=selected_phone,
+        status_filter=status_filter,
+        payment_filter=payment_filter,
+        result_count=len(customer_rows),
     )
 
 
@@ -2374,6 +2456,9 @@ def add_worker_salary_payment(worker_id):
     amount = parse_money(request.form.get("amount"), "Payment amount", errors, required=True)
     if amount <= 0:
         errors.append("Payment amount must be greater than zero.")
+    payment_type = (request.form.get("payment_type") or "Paid").strip()
+    if payment_type not in {"Paid", "Advance"}:
+        errors.append("Choose a valid worker payment type.")
     note = clean_text(request.form.get("note"), "Payment note", errors, max_length=255, required=False)
 
     if errors:
@@ -2384,13 +2469,13 @@ def add_worker_salary_payment(worker_id):
     now = datetime.now().isoformat(timespec="seconds")
     get_db().execute(
         """
-        INSERT INTO worker_salary_payments (worker_id, payment_date, amount, note, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO worker_salary_payments (worker_id, payment_date, amount, payment_type, note, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (worker_id, payment_date, amount, note, now, now),
+        (worker_id, payment_date, amount, payment_type, note, now, now),
     )
     get_db().commit()
-    flash(f"Salary payment saved for {worker['name']}.", "success")
+    flash(f"{payment_type} saved for {worker['name']}.", "success")
     return redirect(url_for("workers", month=attendance_month, _anchor=f"attendance-worker-{worker_id}"))
 
 
@@ -2422,7 +2507,8 @@ def settings():
             "receipt_note": clean_text(request.form.get("receipt_note"), "Receipt note", errors, max_length=500, required=False),
         }
 
-        logo = validate_upload(request.files.get("logo"), errors)
+        cropped_logo_data = (request.form.get("cropped_logo") or "").strip()
+        logo = None if cropped_logo_data else validate_upload(request.files.get("logo"), errors)
         if errors:
             for error in errors:
                 flash(error, "error")
@@ -2430,8 +2516,17 @@ def settings():
 
         old_logo = settings_row.get("logo_filename")
         new_logo = old_logo
-        if logo:
+        if cropped_logo_data:
+            new_logo = save_logo_data_url(cropped_logo_data, errors)
+        elif logo:
             new_logo = save_upload(logo)
+
+        if errors:
+            for error in errors:
+                flash(error, "error")
+            if new_logo and new_logo != old_logo:
+                delete_upload(new_logo)
+            return render_template("settings.html", settings={**settings_row, **data}, license=get_license_status())
 
         get_db().execute(
             """
@@ -2462,16 +2557,14 @@ def settings():
 @app.route("/settings/reset-pin", methods=("POST",))
 def reset_admin_pin():
     settings_row = dict(get_shop_settings())
-    registered_mobile = settings_row.get("phone_number", "")
     errors = []
-    submitted_mobile = validate_phone(request.form.get("registered_mobile"), errors)
+    stored_pin = (settings_row.get("admin_pin") or "").strip()
+    current_pin = (request.form.get("current_pin") or "").strip()
     new_pin = (request.form.get("new_pin") or "").strip()
     confirm_pin = (request.form.get("confirm_pin") or "").strip()
 
-    if not phone_digits(registered_mobile):
-        errors.append("Save the shop mobile number first, then reset the PIN.")
-    elif not phone_digits_match(submitted_mobile, registered_mobile):
-        errors.append("Registered mobile number does not match shop settings.")
+    if stored_pin and not hmac.compare_digest(current_pin, stored_pin):
+        errors.append("Current admin PIN is incorrect.")
 
     if not re.fullmatch(r"\d{4,12}", new_pin):
         errors.append("New admin PIN must be 4 to 12 digits.")
@@ -2501,6 +2594,157 @@ def backup_upload_filenames(db):
     for row in db.execute("SELECT logo_filename FROM shop_settings WHERE logo_filename IS NOT NULL AND logo_filename != ''").fetchall():
         filenames.add(row["logo_filename"])
     return filenames
+
+
+def pc_uuid(prefix, value):
+    return f"pc-{prefix}-{value}"
+
+
+def build_backup_data_json(db):
+    motors = [dict(row) for row in db.execute("SELECT * FROM motors WHERE deleted_at IS NULL ORDER BY id ASC").fetchall()]
+    workers = [dict(row) for row in db.execute("SELECT * FROM workers ORDER BY id ASC").fetchall()]
+    customer_map = {}
+    backup_motors = []
+    backup_media = []
+    backup_workers = []
+    backup_attendance = []
+    backup_salary_payments = []
+    now = datetime.now().isoformat(timespec="seconds")
+
+    for motor in motors:
+        customer_uuid = pc_uuid("customer", phone_digits(motor.get("phone_number")) or motor["phone_number"] or motor["id"])
+        customer = customer_map.setdefault(
+            customer_uuid,
+            {
+                "uuid": customer_uuid,
+                "name": motor["customer_name"],
+                "phone_number": motor["phone_number"],
+                "motor_count": 0,
+                "balance_due": 0,
+                "last_activity": motor["date_added"],
+                "device_id": "pc",
+                "created_at": motor["created_at"],
+                "updated_at": motor["updated_at"],
+            },
+        )
+        customer["motor_count"] += 1
+        customer["balance_due"] += float(balance_amount(motor))
+        if motor["date_added"] > customer["last_activity"]:
+            customer["last_activity"] = motor["date_added"]
+
+        motor_uuid = motor.get("phone_uuid") or pc_uuid("motor", motor["id"])
+        backup_motors.append(
+            {
+                "uuid": motor_uuid,
+                "job_number": motor["job_number"],
+                "customer_uuid": customer_uuid,
+                "customer_name": motor["customer_name"],
+                "phone_number": motor["phone_number"],
+                "motor_type": motor["motor_type"],
+                "problem_description": motor["problem_description"],
+                "estimated_cost": motor["estimated_cost"],
+                "final_cost": motor["final_cost"],
+                "advance_paid": motor["advance_paid"],
+                "payment_status": motor["payment_status"],
+                "status": motor["status"],
+                "date_added": motor["date_added"],
+                "deadline_date": motor["deadline_date"],
+                "device_id": motor.get("source_device_id") or "pc",
+                "created_at": motor["created_at"],
+                "updated_at": motor["updated_at"],
+            }
+        )
+
+        media_rows = [dict(row) for row in db.execute("SELECT * FROM motor_media WHERE motor_id = ? ORDER BY sort_order, id", (motor["id"],)).fetchall()]
+        for media in media_rows:
+            backup_media.append(
+                {
+                    "uuid": media.get("phone_uuid") or pc_uuid("media", media["id"]),
+                    "motor_uuid": motor_uuid,
+                    "uri": f"uploads/motors/{media['filename']}",
+                    "filename": media["filename"],
+                    "media_type": media["media_type"],
+                    "checksum": "",
+                    "sort_order": media["sort_order"],
+                    "device_id": "pc",
+                    "created_at": media["created_at"],
+                    "updated_at": media["created_at"],
+                }
+            )
+
+    worker_uuid_by_id = {}
+    for worker in workers:
+        worker_uuid = worker.get("phone_uuid") or pc_uuid("worker", worker["id"])
+        worker_uuid_by_id[worker["id"]] = worker_uuid
+        backup_workers.append(
+            {
+                "uuid": worker_uuid,
+                "name": worker["name"],
+                "phone_number": worker["phone_number"],
+                "role": worker["role"],
+                "monthly_salary": worker["monthly_salary"],
+                "active": worker["active"],
+                "device_id": worker.get("source_device_id") or "pc",
+                "created_at": worker["created_at"],
+                "updated_at": worker["updated_at"],
+            }
+        )
+
+    if table_exists(db, "worker_attendance"):
+        for row in db.execute("SELECT * FROM worker_attendance ORDER BY id ASC").fetchall():
+            row = dict(row)
+            worker_uuid = worker_uuid_by_id.get(row["worker_id"])
+            if not worker_uuid:
+                continue
+            backup_attendance.append(
+                {
+                    "uuid": row.get("phone_uuid") or pc_uuid("attendance", row["id"]),
+                    "worker_uuid": worker_uuid,
+                    "work_date": row["work_date"],
+                    "status": row["status"],
+                    "note": row["note"] or "",
+                    "device_id": "pc",
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+
+    if table_exists(db, "worker_salary_payments"):
+        for row in db.execute("SELECT * FROM worker_salary_payments ORDER BY id ASC").fetchall():
+            row = dict(row)
+            worker_uuid = worker_uuid_by_id.get(row["worker_id"])
+            if not worker_uuid:
+                continue
+            backup_salary_payments.append(
+                {
+                    "uuid": row.get("phone_uuid") or pc_uuid("salary-payment", row["id"]),
+                    "worker_uuid": worker_uuid,
+                    "payment_date": row["payment_date"],
+                    "amount": row["amount"],
+                    "payment_type": row.get("payment_type") or "Paid",
+                    "note": row["note"] or "",
+                    "device_id": "pc",
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+
+    settings_row = dict(db.execute("SELECT * FROM shop_settings WHERE id = 1").fetchone())
+    app_meta = [
+        {"key": "shop_name", "value": settings_row.get("shop_name") or "Motor Repair Manager", "updated_at": settings_row.get("updated_at") or now},
+    ]
+    if settings_row.get("logo_filename"):
+        app_meta.append({"key": "shop_logo_uri", "value": f"uploads/shop/{settings_row['logo_filename']}", "updated_at": settings_row.get("updated_at") or now})
+
+    return {
+        "customers": list(customer_map.values()),
+        "motors": backup_motors,
+        "motorMedia": backup_media,
+        "workers": backup_workers,
+        "workerAttendance": backup_attendance,
+        "workerSalaryPayments": backup_salary_payments,
+        "appMeta": app_meta,
+    }
 
 
 def apply_backup_date_range(temp_db, start_date="", end_date=""):
@@ -2564,26 +2808,44 @@ def create_backup_archive(start_date="", end_date=""):
             filtered_db.row_factory = sqlite3.Row
             range_meta = apply_backup_date_range(filtered_db, start_date, end_date)
             upload_filenames = backup_upload_filenames(filtered_db)
+            backup_data = build_backup_data_json(filtered_db)
+            settings_row = dict(filtered_db.execute("SELECT * FROM shop_settings WHERE id = 1").fetchone())
+            logo_filename = settings_row.get("logo_filename")
             filtered_db.commit()
         finally:
             filtered_db.close()
         with zipfile.ZipFile(backup_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.write(temp_db, "database.db")
             manifest = {
+                "app": "Motor Repair Manager PC",
                 "backupType": "pc_export",
                 "appId": APP_ID,
                 "platform": LICENSE_PLATFORM,
                 "createdAt": datetime.now().isoformat(timespec="seconds"),
                 "dateRange": range_meta,
                 "licenseIncluded": False,
+                "counts": {
+                    "motors": len(backup_data["motors"]),
+                    "customers": len(backup_data["customers"]),
+                    "workers": len(backup_data["workers"]),
+                    "attendance": len(backup_data["workerAttendance"]),
+                    "salaryPayments": len(backup_data["workerSalaryPayments"]),
+                    "media": len(backup_data["motorMedia"]),
+                },
             }
             archive.writestr("backup_manifest.json", json.dumps(manifest, indent=2))
+            archive.writestr("backup_data.json", json.dumps(backup_data, indent=2))
             archive.writestr("metadata.txt", f"Created: {manifest['createdAt']}\nLicense included: no\n")
             if UPLOAD_FOLDER.exists():
                 for filename in upload_filenames:
                     upload = UPLOAD_FOLDER / filename
                     if upload.exists() and upload.is_file():
                         archive.write(upload, f"uploads/{upload.relative_to(UPLOAD_FOLDER).as_posix()}")
+                        archive.write(upload, f"uploads/motors/{upload.name}")
+                if logo_filename:
+                    logo_file = UPLOAD_FOLDER / logo_filename
+                    if logo_file.exists() and logo_file.is_file():
+                        archive.write(logo_file, f"uploads/shop/{logo_file.name}")
     finally:
         if destination is not None:
             destination.close()
@@ -2627,7 +2889,10 @@ def validate_zip_members(zip_file):
         member_path = Path(member)
         if member_path.is_absolute() or ".." in member_path.parts:
             return False
-    return "database.db" in zip_file.namelist()
+    names = set(zip_file.namelist())
+    has_pc_database = "database.db" in names
+    has_json_backup = "backup_manifest.json" in names and "backup_data.json" in names
+    return has_pc_database or has_json_backup
 
 
 def clear_uploads_folder():
@@ -2686,6 +2951,319 @@ def find_phone_upload(temp_path, filename):
             return candidate
     matches = list(uploads_root.rglob(filename)) if uploads_root.exists() else []
     return matches[0] if matches else None
+
+
+def backup_stats_total(stats):
+    return sum(int(value or 0) for value in stats.values())
+
+
+def import_phone_backup_json(temp_path, manifest, data):
+    source_device_id = (manifest or {}).get("deviceId", "") or (manifest or {}).get("device_id", "") or "phone"
+    stats = {
+        "customers": 0,
+        "motors": 0,
+        "media": 0,
+        "workers": 0,
+        "attendance": 0,
+        "salary_payments": 0,
+    }
+    db = get_db()
+    ensure_phone_import_tables(db)
+    motor_id_by_uuid = {}
+    worker_id_by_uuid = {}
+
+    for row in data.get("appMeta", []) or []:
+        key = str(row.get("key") or "")
+        value = str(row.get("value") or "")
+        if key == "shop_name" and value:
+            db.execute(
+                "UPDATE shop_settings SET shop_name = ?, updated_at = ? WHERE id = 1",
+                (value, datetime.now().isoformat(timespec="seconds")),
+            )
+        elif key == "shop_logo_uri" and value:
+            logo_source = find_phone_upload(temp_path, Path(value).name)
+            if logo_source:
+                filename = unique_upload_filename(Path(value).name)
+                shutil.copy2(logo_source, UPLOAD_FOLDER / filename)
+                db.execute(
+                    "UPDATE shop_settings SET logo_filename = ?, updated_at = ? WHERE id = 1",
+                    (filename, datetime.now().isoformat(timespec="seconds")),
+                )
+
+    for row in data.get("customers", []) or []:
+        uuid_value = str(row.get("uuid") or "")
+        if not uuid_value:
+            continue
+        now = str(row.get("updated_at") or datetime.now().isoformat(timespec="seconds"))
+        db.execute(
+            """
+            INSERT INTO phone_customers (
+                phone_uuid, name, phone_number, motor_count, balance_due,
+                last_activity, source_device_id, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(phone_uuid) DO UPDATE SET
+                name = excluded.name,
+                phone_number = excluded.phone_number,
+                motor_count = excluded.motor_count,
+                balance_due = excluded.balance_due,
+                last_activity = excluded.last_activity,
+                source_device_id = excluded.source_device_id,
+                updated_at = excluded.updated_at
+            """,
+            (
+                uuid_value,
+                str(row.get("name") or ""),
+                str(row.get("phone_number") or ""),
+                int(row.get("motor_count") or 0),
+                float(row.get("balance_due") or 0),
+                str(row.get("last_activity") or date.today().isoformat()),
+                source_device_id,
+                str(row.get("created_at") or now),
+                now,
+            ),
+        )
+        stats["customers"] += 1
+
+    for row in data.get("motors", []) or []:
+        uuid_value = str(row.get("uuid") or "")
+        if not uuid_value:
+            continue
+        status = str(row.get("status") or "Received")
+        if status not in REPAIR_STATUSES:
+            status = map_old_status(status)
+        payment_status = str(row.get("payment_status") or "Unpaid")
+        if payment_status not in PAYMENT_STATUSES:
+            payment_status = calculate_payment_status(row.get("estimated_cost"), row.get("final_cost"), row.get("advance_paid"))
+        now = str(row.get("updated_at") or datetime.now().isoformat(timespec="seconds"))
+        existing = db.execute("SELECT id FROM motors WHERE phone_uuid = ?", (uuid_value,)).fetchone()
+        if existing:
+            motor_id = existing["id"]
+            db.execute(
+                """
+                UPDATE motors
+                SET customer_name = ?, phone_number = ?, motor_type = ?, problem_description = ?,
+                    estimated_cost = ?, final_cost = ?, advance_paid = ?, payment_status = ?,
+                    status = ?, date_added = ?, deadline_date = ?, source_device_id = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    str(row.get("customer_name") or ""),
+                    str(row.get("phone_number") or ""),
+                    str(row.get("motor_type") or ""),
+                    str(row.get("problem_description") or ""),
+                    float(row.get("estimated_cost") or 0),
+                    float(row.get("final_cost") or 0),
+                    float(row.get("advance_paid") or 0),
+                    payment_status,
+                    status,
+                    str(row.get("date_added") or date.today().isoformat())[:10],
+                    str(row.get("deadline_date") or date.today().isoformat())[:10],
+                    source_device_id,
+                    now,
+                    motor_id,
+                ),
+            )
+        else:
+            cursor = db.execute(
+                """
+                INSERT INTO motors (
+                    job_number, customer_name, phone_number, motor_type, problem_description,
+                    image_filename, estimated_cost, final_cost, advance_paid, payment_status,
+                    status, date_added, deadline_date, deleted_at, created_at, updated_at,
+                    phone_uuid, source_device_id
+                )
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+                """,
+                (
+                    unique_job_number(db, str(row.get("job_number") or "")),
+                    str(row.get("customer_name") or ""),
+                    str(row.get("phone_number") or ""),
+                    str(row.get("motor_type") or ""),
+                    str(row.get("problem_description") or ""),
+                    float(row.get("estimated_cost") or 0),
+                    float(row.get("final_cost") or 0),
+                    float(row.get("advance_paid") or 0),
+                    payment_status,
+                    status,
+                    str(row.get("date_added") or date.today().isoformat())[:10],
+                    str(row.get("deadline_date") or date.today().isoformat())[:10],
+                    str(row.get("created_at") or now),
+                    now,
+                    uuid_value,
+                    source_device_id,
+                ),
+            )
+            motor_id = cursor.lastrowid
+        motor_id_by_uuid[uuid_value] = motor_id
+        stats["motors"] += 1
+
+    for row in data.get("workers", []) or []:
+        uuid_value = str(row.get("uuid") or "")
+        if not uuid_value:
+            continue
+        now = str(row.get("updated_at") or datetime.now().isoformat(timespec="seconds"))
+        monthly_salary = float(row.get("monthly_salary") or 0)
+        daily_salary = monthly_salary / max(calendar.monthrange(date.today().year, date.today().month)[1], 1)
+        existing = db.execute("SELECT id FROM workers WHERE phone_uuid = ?", (uuid_value,)).fetchone()
+        if existing:
+            worker_id = existing["id"]
+            db.execute(
+                """
+                UPDATE workers
+                SET name = ?, phone_number = ?, role = ?, monthly_salary = ?, daily_salary = ?,
+                    active = ?, source_device_id = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    str(row.get("name") or ""),
+                    str(row.get("phone_number") or ""),
+                    str(row.get("role") or ""),
+                    monthly_salary,
+                    daily_salary,
+                    int(row.get("active") if row.get("active") is not None else 1),
+                    source_device_id,
+                    now,
+                    worker_id,
+                ),
+            )
+        else:
+            cursor = db.execute(
+                """
+                INSERT INTO workers (
+                    name, phone_number, role, monthly_salary, daily_salary, active,
+                    created_at, updated_at, phone_uuid, source_device_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(row.get("name") or ""),
+                    str(row.get("phone_number") or ""),
+                    str(row.get("role") or ""),
+                    monthly_salary,
+                    daily_salary,
+                    int(row.get("active") if row.get("active") is not None else 1),
+                    str(row.get("created_at") or now),
+                    now,
+                    uuid_value,
+                    source_device_id,
+                ),
+            )
+            worker_id = cursor.lastrowid
+        worker_id_by_uuid[uuid_value] = worker_id
+        stats["workers"] += 1
+
+    for row in data.get("workerAttendance", []) or []:
+        worker_id = worker_id_by_uuid.get(str(row.get("worker_uuid") or ""))
+        if not worker_id:
+            continue
+        uuid_value = str(row.get("uuid") or pc_uuid("attendance-import", uuid.uuid4().hex))
+        now = str(row.get("updated_at") or datetime.now().isoformat(timespec="seconds"))
+        status = str(row.get("status") or "Present")
+        if status not in ATTENDANCE_STATUSES:
+            status = "Present"
+        db.execute(
+            """
+            INSERT INTO worker_attendance (
+                worker_id, work_date, status, note, created_at, updated_at, phone_uuid
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(worker_id, work_date) DO UPDATE SET
+                status = excluded.status,
+                note = excluded.note,
+                updated_at = excluded.updated_at,
+                phone_uuid = excluded.phone_uuid
+            """,
+            (
+                worker_id,
+                str(row.get("work_date") or date.today().isoformat())[:10],
+                status,
+                str(row.get("note") or ""),
+                str(row.get("created_at") or now),
+                now,
+                uuid_value,
+            ),
+        )
+        stats["attendance"] += 1
+
+    for row in data.get("workerSalaryPayments", []) or []:
+        worker_id = worker_id_by_uuid.get(str(row.get("worker_uuid") or ""))
+        if not worker_id:
+            continue
+        uuid_value = str(row.get("uuid") or pc_uuid("salary-payment-import", uuid.uuid4().hex))
+        payment_type = str(row.get("payment_type") or "Paid")
+        if payment_type not in {"Paid", "Advance"}:
+            payment_type = "Paid"
+        now = str(row.get("updated_at") or datetime.now().isoformat(timespec="seconds"))
+        db.execute(
+            """
+            INSERT INTO worker_salary_payments (
+                phone_uuid, worker_id, payment_date, amount, payment_type, note,
+                source_device_id, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(phone_uuid) DO UPDATE SET
+                worker_id = excluded.worker_id,
+                payment_date = excluded.payment_date,
+                amount = excluded.amount,
+                payment_type = excluded.payment_type,
+                note = excluded.note,
+                source_device_id = excluded.source_device_id,
+                updated_at = excluded.updated_at
+            """,
+            (
+                uuid_value,
+                worker_id,
+                str(row.get("payment_date") or date.today().isoformat())[:10],
+                float(row.get("amount") or 0),
+                payment_type,
+                str(row.get("note") or ""),
+                source_device_id,
+                str(row.get("created_at") or now),
+                now,
+            ),
+        )
+        stats["salary_payments"] += 1
+
+    for row in data.get("motorMedia", []) or []:
+        motor_id = motor_id_by_uuid.get(str(row.get("motor_uuid") or ""))
+        if not motor_id:
+            continue
+        uuid_value = str(row.get("uuid") or "")
+        if uuid_value and db.execute("SELECT id FROM motor_media WHERE phone_uuid = ?", (uuid_value,)).fetchone():
+            continue
+        filename_value = Path(str(row.get("filename") or "")).name
+        source_file = find_phone_upload(temp_path, filename_value)
+        if not source_file:
+            continue
+        filename = unique_upload_filename(filename_value)
+        shutil.copy2(source_file, UPLOAD_FOLDER / filename)
+        media_type = str(row.get("media_type") or "image")
+        if media_type not in {"image", "video"}:
+            media_type = "image"
+        db.execute(
+            """
+            INSERT INTO motor_media (motor_id, filename, media_type, sort_order, created_at, phone_uuid)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                motor_id,
+                filename,
+                media_type,
+                int(row.get("sort_order") or 0),
+                str(row.get("created_at") or datetime.now().isoformat(timespec="seconds")),
+                uuid_value or pc_uuid("media-import", uuid.uuid4().hex),
+            ),
+        )
+        stats["media"] += 1
+
+    for motor_id in set(motor_id_by_uuid.values()):
+        db.execute(
+            "UPDATE motors SET image_filename = ? WHERE id = ?",
+            (primary_motor_image_filename(db, motor_id), motor_id),
+        )
+    db.commit()
+    return stats
 
 
 def import_phone_backup(temp_path, manifest):
@@ -2862,27 +3440,44 @@ def import_phone_backup(temp_path, manifest):
                 stats["attendance"] += 1
 
         if table_exists(phone_db, "worker_salary_payments"):
+            salary_payment_columns = {
+                column[1] for column in phone_db.execute("PRAGMA table_info(worker_salary_payments)").fetchall()
+            }
             for row in phone_db.execute("SELECT * FROM worker_salary_payments").fetchall():
                 worker_id = worker_id_by_uuid.get(row["worker_uuid"])
                 if not worker_id:
                     continue
+                payment_type = row["payment_type"] if "payment_type" in salary_payment_columns else "Paid"
+                if payment_type not in {"Paid", "Advance"}:
+                    payment_type = "Paid"
                 now = row["updated_at"] or datetime.now().isoformat(timespec="seconds")
                 db.execute(
                     """
                     INSERT INTO worker_salary_payments (
-                        phone_uuid, worker_id, payment_date, amount, note,
+                        phone_uuid, worker_id, payment_date, amount, payment_type, note,
                         source_device_id, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(phone_uuid) DO UPDATE SET
                         worker_id = excluded.worker_id,
                         payment_date = excluded.payment_date,
                         amount = excluded.amount,
+                        payment_type = excluded.payment_type,
                         note = excluded.note,
                         source_device_id = excluded.source_device_id,
                         updated_at = excluded.updated_at
                     """,
-                    (row["uuid"], worker_id, row["payment_date"], row["amount"], row["note"], source_device_id, row["created_at"] or now, now),
+                    (
+                        row["uuid"],
+                        worker_id,
+                        row["payment_date"],
+                        row["amount"],
+                        payment_type,
+                        row["note"],
+                        source_device_id,
+                        row["created_at"] or now,
+                        now,
+                    ),
                 )
                 stats["salary_payments"] += 1
 
@@ -2932,7 +3527,7 @@ def restore_backup():
     try:
         with zipfile.ZipFile(backup_file.stream) as archive:
             if not validate_zip_members(archive):
-                flash("Backup ZIP is missing database.db or has unsafe paths.", "error")
+                flash("Invalid backup ZIP. It must contain database.db or both backup_manifest.json and backup_data.json.", "error")
                 return redirect(url_for("backup"))
 
             create_backup_archive()
@@ -2941,16 +3536,39 @@ def restore_backup():
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
                 archive.extractall(temp_path)
-                restored_db = temp_path / "database.db"
-                with sqlite3.connect(restored_db) as check_db:
-                    check_db.execute("SELECT name FROM sqlite_master LIMIT 1").fetchone()
-
                 manifest_path = temp_path / "backup_manifest.json"
+                data_path = temp_path / "backup_data.json"
                 manifest = {}
                 if manifest_path.exists():
                     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                if manifest.get("backupType") == "phone_export":
+                backup_type = manifest.get("backupType")
+                if data_path.exists() and backup_type in {"phone_export", "phone_export_range"}:
+                    data = json.loads(data_path.read_text(encoding="utf-8"))
+                    stats = import_phone_backup_json(temp_path, manifest, data)
+                    if backup_stats_total(stats) == 0:
+                        flash("Phone backup is valid, but it has no importable records.", "error")
+                        return redirect(url_for("backup"))
+                    flash(
+                        "Phone backup imported: "
+                        f"{stats['motors']} motors, {stats['customers']} customers, "
+                        f"{stats['workers']} workers, {stats['attendance']} attendance records, "
+                        f"{stats['salary_payments']} salary payments, {stats['media']} media files.",
+                        "success",
+                    )
+                    return redirect(url_for("backup"))
+
+                restored_db = temp_path / "database.db"
+                if not restored_db.exists():
+                    flash("Backup ZIP is missing database.db. For phone backups, backup_data.json is also required.", "error")
+                    return redirect(url_for("backup"))
+                with sqlite3.connect(restored_db) as check_db:
+                    check_db.execute("SELECT name FROM sqlite_master LIMIT 1").fetchone()
+
+                if backup_type in {"phone_export", "phone_export_range"}:
                     stats = import_phone_backup(temp_path, manifest)
+                    if backup_stats_total(stats) == 0:
+                        flash("Phone backup is valid, but it has no importable records.", "error")
+                        return redirect(url_for("backup"))
                     flash(
                         "Phone backup imported: "
                         f"{stats['motors']} motors, {stats['customers']} customers, "
@@ -2971,8 +3589,10 @@ def restore_backup():
                             shutil.copy2(upload, destination)
         init_db()
         flash("Backup restored successfully.", "success")
-    except (json.JSONDecodeError, sqlite3.Error, zipfile.BadZipFile, OSError):
-        flash("Backup restore failed. The file may be damaged.", "error")
+    except json.JSONDecodeError:
+        flash("Backup restore failed. backup_manifest.json or backup_data.json is not valid JSON.", "error")
+    except (sqlite3.Error, zipfile.BadZipFile, OSError):
+        flash("Backup restore failed. The file may be damaged or not created by this app.", "error")
     return redirect(url_for("backup"))
 
 

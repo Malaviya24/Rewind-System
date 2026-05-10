@@ -4,12 +4,14 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { toByteArray, fromByteArray } from "base64-js";
 import { BackupData, BackupManifest, BackupRange } from "@/models/types";
 import { getBackupCounts, getBackupData, getShopSettings, importBackupData } from "@/db/repositories";
+import { schemaVersion } from "@/db/schema";
 import { getDeviceId } from "@/services/device";
 import { nowIso } from "@/utils/dates";
 
 const databasePath = `${FileSystem.documentDirectory}SQLite/motor_repair_phone.db`;
 const uploadRoot = `${FileSystem.documentDirectory}uploads/`;
 const exportRoot = `${FileSystem.documentDirectory}exports/`;
+const supportedBackupTypes = new Set(["phone_export", "phone_export_range", "pc_export", "pc_export_range"]);
 
 export async function createPhoneBackupZip(range?: BackupRange) {
   await ensureExportFolder();
@@ -70,32 +72,54 @@ export async function importPhoneBackupZip(zipUri: string) {
   const base64 = await FileSystem.readAsStringAsync(zipUri, {
     encoding: FileSystem.EncodingType.Base64
   });
-  const unzipped = unzipSync(toByteArray(base64));
+  let unzipped: Record<string, Uint8Array>;
+  try {
+    unzipped = unzipSync(toByteArray(base64));
+  } catch {
+    throw new Error("Backup ZIP could not be opened.");
+  }
+  validateZipPaths(unzipped);
   const manifestBytes = unzipped["backup_manifest.json"];
   const dataBytes = unzipped["backup_data.json"];
-  if (!manifestBytes || !dataBytes) {
-    throw new Error("Invalid backup: backup_manifest.json or backup_data.json is missing.");
+  if (!manifestBytes) {
+    throw new Error("Invalid backup: backup_manifest.json is missing.");
   }
-  const manifest = JSON.parse(strFromU8(manifestBytes)) as BackupManifest;
-  if (!manifest.app?.includes("Motor Repair Manager")) {
-    throw new Error("This ZIP is not a Motor Repair Manager phone backup.");
+  if (!dataBytes) {
+    if (unzipped["database.db"]) {
+      throw new Error("Invalid backup: backup_data.json is missing. If this is an old PC backup, create a new backup from updated PC software.");
+    }
+    throw new Error("Invalid backup: backup_data.json is missing.");
   }
-  const data = JSON.parse(strFromU8(dataBytes)) as BackupData;
+  let manifest: BackupManifest;
+  let data: BackupData;
+  try {
+    manifest = JSON.parse(strFromU8(manifestBytes)) as BackupManifest;
+    data = JSON.parse(strFromU8(dataBytes)) as BackupData;
+  } catch {
+    throw new Error("Backup ZIP contains damaged backup data.");
+  }
+  validateManifest(manifest);
+  if (!hasImportableRecords(data)) {
+    throw new Error("Backup is valid but contains no records to import.");
+  }
   await restoreUploadFiles(unzipped, data);
-  await importBackupData(data);
-  return { manifest };
+  const stats = await importBackupData(data);
+  return { manifest, stats };
 }
 
 async function buildManifest(data: BackupData, range?: BackupRange): Promise<BackupManifest> {
   return {
     app: "Motor Repair Manager Android",
+    appId: "rewindin-shop",
+    platform: "android",
     backupType: range ? "phone_export_range" : "phone_export",
     appVersion: "0.1.0",
-    schemaVersion: 1,
+    schemaVersion,
     deviceId: await getDeviceId(),
     createdAt: nowIso(),
     dateRange: range,
     shop: await getShopSettings(),
+    licenseIncluded: false,
     counts: {
       motors: data.motors.length,
       customers: data.customers.length,
@@ -105,6 +129,39 @@ async function buildManifest(data: BackupData, range?: BackupRange): Promise<Bac
       media: data.motorMedia.length
     }
   };
+}
+
+function validateManifest(manifest: BackupManifest) {
+  const appName = String(manifest.app || "");
+  const appId = String(manifest.appId || "");
+  if (!appName.includes("Motor Repair Manager") && appId !== "rewindin-shop") {
+    throw new Error("This ZIP is not a Motor Repair Manager backup.");
+  }
+  if (!supportedBackupTypes.has(String(manifest.backupType))) {
+    throw new Error("Unsupported backup type.");
+  }
+}
+
+function hasImportableRecords(data: BackupData) {
+  return (
+    (data.customers || []).length +
+      (data.motors || []).length +
+      (data.motorMedia || []).length +
+      (data.workers || []).length +
+      (data.workerAttendance || []).length +
+      (data.workerSalaryPayments || []).length +
+      (data.appMeta || []).length >
+    0
+  );
+}
+
+function validateZipPaths(unzipped: Record<string, Uint8Array>) {
+  for (const path of Object.keys(unzipped)) {
+    const normalized = path.replace(/\\/g, "/");
+    if (normalized.startsWith("/") || normalized.includes("../") || normalized === ".." || normalized.includes("/..")) {
+      throw new Error("Backup ZIP contains unsafe file paths.");
+    }
+  }
 }
 
 async function appendSelectedUploadFiles(data: BackupData, files: Record<string, Uint8Array>) {

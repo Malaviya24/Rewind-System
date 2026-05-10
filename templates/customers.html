@@ -3,11 +3,11 @@
 {% block title %}Customers - Motor Repair Manager{% endblock %}
 
 {% block content %}
-<section class="customer-command">
+<section class="customer-command compact-command">
     <div class="customer-command-copy">
         <p class="eyebrow">Customer operations</p>
         <h1>Customer Desk</h1>
-        <p>Review repeat customers, repair history, balances, and follow-up actions from one focused workspace.</p>
+        <p>Find customers by name or phone, check balances, and open their motor jobs quickly.</p>
     </div>
     <div class="customer-command-actions">
         <a class="button ghost" href="{{ url_for('customers') }}">All Customers</a>
@@ -19,7 +19,7 @@
     <article class="customer-summary-card">
         <span>Customers</span>
         <strong>{{ customer_summary.total_customers or 0 }}</strong>
-        <small>{{ customer_summary.total_jobs or 0 }} repair jobs</small>
+        <small>{{ customer_summary.total_jobs or 0 }} motor jobs</small>
     </article>
     <article class="customer-summary-card value">
         <span>Total value</span>
@@ -27,7 +27,7 @@
         <small>{{ customer_summary.total_paid|money }} collected</small>
     </article>
     <article class="customer-summary-card balance">
-        <span>Balance due</span>
+        <span>Pending balance</span>
         <strong>{{ customer_summary.balance_due|money }}</strong>
         <small>Outstanding customer amount</small>
     </article>
@@ -39,116 +39,95 @@
             <span>Search</span>
             <input type="search" name="q" value="{{ search }}" placeholder="Name or phone">
         </label>
-        <button class="button" type="submit">Search</button>
+        <label>
+            <span>Repair Status</span>
+            <select name="status">
+                <option value="all" {{ 'selected' if status_filter == 'all' else '' }}>All repairs</option>
+                <option value="open" {{ 'selected' if status_filter == 'open' else '' }}>Open</option>
+                <option value="done" {{ 'selected' if status_filter == 'done' else '' }}>Completed / Delivered</option>
+                <option value="overdue" {{ 'selected' if status_filter == 'overdue' else '' }}>Overdue</option>
+                {% for status in repair_statuses %}
+                    <option value="{{ status }}" {{ 'selected' if status_filter == status else '' }}>{{ status }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Payment</span>
+            <select name="payment">
+                <option value="all" {{ 'selected' if payment_filter == 'all' else '' }}>All payments</option>
+                <option value="pending" {{ 'selected' if payment_filter == 'pending' else '' }}>Unpaid / Pending</option>
+                <option value="Partial" {{ 'selected' if payment_filter == 'Partial' else '' }}>Partial</option>
+                <option value="Paid" {{ 'selected' if payment_filter == 'Paid' else '' }}>Paid</option>
+            </select>
+        </label>
+        <button class="button" type="submit">Apply</button>
         <a class="button ghost" href="{{ url_for('customers') }}">Clear</a>
     </form>
 </section>
 
-<section class="customer-layout customer-workspace">
-    <aside class="customer-panel customer-directory-panel">
-        <div class="customer-section-header">
-            <div>
-                <p class="eyebrow">{{ customers|length }} result{{ '' if customers|length == 1 else 's' }}</p>
-                <h2>Customer Directory</h2>
-            </div>
+<section class="customer-panel customer-directory-panel customer-directory-full">
+    <div class="customer-section-header">
+        <div>
+            <p class="eyebrow">{{ result_count or 0 }} result{{ '' if result_count == 1 else 's' }}</p>
+            <h2>Customer Directory</h2>
         </div>
-        {% if customers %}
-            <div class="customer-list">
-                {% for customer in customers %}
-                    <a class="customer-row {{ 'active' if selected_phone == customer.phone_number else '' }}" href="{{ url_for('customers', phone=customer.phone_number, q=search) }}">
-                        <span class="customer-avatar">{{ customer.customer_name[:1] }}</span>
-                        <span class="customer-row-main">
-                            <strong>{{ customer.customer_name }}</strong>
-                            <small>{{ customer.phone_number }}</small>
-                            <small>Last repair {{ customer.last_repair_date|display_date }}</small>
-                        </span>
-                        <span class="customer-row-meta">
-                            <strong>{{ customer.balance_due|money }}</strong>
-                            <small>{{ customer.total_jobs }} job{{ '' if customer.total_jobs == 1 else 's' }}</small>
-                        </span>
-                    </a>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="customer-empty">
-                <strong>No customer history found</strong>
-                <p>Add a repair job or adjust the current search.</p>
-                <a class="button primary small" href="{{ url_for('add_motor') }}">Add Motor</a>
-            </div>
-        {% endif %}
-    </aside>
+    </div>
 
-    <section class="customer-panel customer-history-panel">
-        <div class="customer-section-header">
-            <div>
-                <p class="eyebrow">Repair history</p>
-                {% if selected_customer %}
-                    <h2>{{ selected_customer.customer_name }}</h2>
-                    <p>{{ selected_customer.phone_number }} - {{ selected_customer.total_jobs }} job{{ '' if selected_customer.total_jobs == 1 else 's' }}</p>
-                {% else %}
-                    <h2>Repair History</h2>
-                    <p>Choose a customer to review previous jobs, balances, receipts, and invoices.</p>
-                {% endif %}
-            </div>
-            {% if selected_customer %}
-                <div class="customer-profile-actions">
-                    <div class="customer-profile-totals">
-                        <span>Balance</span>
-                        <strong>{{ selected_customer.balance_due|money }}</strong>
+    {% if customers %}
+        <div class="customer-card-grid">
+            {% for customer in customers %}
+                <article class="customer-card">
+                    <header>
+                        <span class="customer-avatar">{{ customer.customer_name[:1] }}</span>
+                        <div>
+                            <h3>{{ customer.customer_name }}</h3>
+                            <p>{{ customer.phone_number }}</p>
+                        </div>
+                    </header>
+                    <dl class="customer-card-metrics">
+                        <div>
+                            <dt>Total motors</dt>
+                            <dd>{{ customer.total_jobs or 0 }}</dd>
+                        </div>
+                        <div>
+                            <dt>Open</dt>
+                            <dd>{{ customer.open_jobs or 0 }}</dd>
+                        </div>
+                        <div>
+                            <dt>Completed</dt>
+                            <dd>{{ customer.completed_jobs or 0 }}</dd>
+                        </div>
+                        <div>
+                            <dt>Pending</dt>
+                            <dd>{{ customer.balance_due|money }}</dd>
+                        </div>
+                    </dl>
+                    <div class="customer-card-footer">
+                        <div>
+                            <span>Last repair</span>
+                            <strong>{{ customer.last_repair_date|display_date }}</strong>
+                        </div>
+                        <div>
+                            <span>Payments</span>
+                            <strong>{{ customer.paid_jobs or 0 }} paid / {{ (customer.partial_jobs or 0) + (customer.unpaid_jobs or 0) }} pending</strong>
+                        </div>
                     </div>
-                    <a
-                        class="button small primary"
-                        href="{{ url_for('motors', q=selected_customer.phone_number) }}"
-                    >
-                        View Motors
-                    </a>
-                </div>
-            {% endif %}
+                    <div class="card-actions">
+                        {% if customer.phone_number %}
+                            <a class="button small ghost" href="tel:{{ customer.phone_number }}">Call</a>
+                            <a class="button small ghost" href="https://wa.me/91{{ customer.phone_number }}" target="_blank" rel="noopener">WhatsApp</a>
+                        {% endif %}
+                        <a class="button small primary" href="{{ url_for('motors', q=customer.phone_number) }}">View Motors</a>
+                    </div>
+                </article>
+            {% endfor %}
         </div>
-        {% if history %}
-            <div class="history-list">
-                {% for motor in history %}
-                    <article class="history-card">
-                        <div class="history-card-top">
-                            <div>
-                                <strong>{{ motor.job_number }}</strong>
-                                <p>{{ motor.motor_type }} - Added {{ motor.date_added|display_date }}</p>
-                            </div>
-                            <span class="status-badge {{ motor.status|status_slug }}">{{ motor.status }}</span>
-                        </div>
-                        <dl class="mini-grid">
-                            <div>
-                                <dt>Amount</dt>
-                                <dd>{{ repair_amount(motor)|money }}</dd>
-                            </div>
-                            <div>
-                                <dt>Paid</dt>
-                                <dd>{{ motor.advance_paid|money }}</dd>
-                            </div>
-                            <div>
-                                <dt>Balance</dt>
-                                <dd>{{ balance_amount(motor)|money }}</dd>
-                            </div>
-                            <div>
-                                <dt>Deadline</dt>
-                                <dd>{{ motor.deadline_date|display_date }}</dd>
-                            </div>
-                        </dl>
-                        <p class="history-problem">{{ motor.problem_description }}</p>
-                        <div class="card-actions">
-                            <a class="button small" href="{{ url_for('edit_motor', motor_id=motor.id) }}">Edit</a>
-                            <a class="button small" href="{{ url_for('receipt', motor_id=motor.id) }}">Receipt</a>
-                            <a class="button small" href="{{ url_for('new_invoice', motor_id=motor.id) }}">Invoice</a>
-                        </div>
-                    </article>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="customer-empty">
-                <strong>{{ 'No repair history for this customer' if selected_phone else 'Select a customer' }}</strong>
-                <p>{{ 'This customer has no active history records.' if selected_phone else 'Pick a customer from the directory to see their repair timeline.' }}</p>
-            </div>
-        {% endif %}
-    </section>
+    {% else %}
+        <div class="customer-empty">
+            <strong>No customers match this filter</strong>
+            <p>Try another search, clear filters, or add a new motor job.</p>
+            <a class="button primary small" href="{{ url_for('add_motor') }}">Add Motor</a>
+        </div>
+    {% endif %}
 </section>
 {% endblock %}

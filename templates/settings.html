@@ -3,25 +3,51 @@
 {% block title %}Settings - Motor Repair Manager{% endblock %}
 
 {% block content %}
-<section class="page-title">
+<section class="page-title settings-title">
     <div>
         <p class="eyebrow">Shop setup</p>
         <h1>Settings</h1>
-        <p class="page-subtitle">Manage shop profile, backups, and admin security.</p>
+        <p class="page-subtitle">Choose a setting category, then update only that area.</p>
     </div>
-    <a class="button" href="{{ url_for('backup') }}">Backup & Restore</a>
 </section>
 
-<section class="settings-layout">
-    <form class="entry-form settings-card settings-main-card" method="post" enctype="multipart/form-data">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+<section class="settings-app-shell" data-settings-shell>
+    <aside class="settings-menu" aria-label="Settings categories">
+        <button class="settings-menu-item active" type="button" data-settings-tab-button="shop">
+            <span>S</span>
+            <strong>Shop Details</strong>
+            <small>Name, logo, receipt info</small>
+        </button>
+        <button class="settings-menu-item" type="button" data-settings-tab-button="security">
+            <span>P</span>
+            <strong>Security PIN</strong>
+            <small>Set or reset admin PIN</small>
+        </button>
+        <button class="settings-menu-item" type="button" data-settings-tab-button="license">
+            <span>L</span>
+            <strong>License</strong>
+            <small>Device code and activation</small>
+        </button>
+        <button class="settings-menu-item" type="button" data-settings-tab-button="backup">
+            <span>B</span>
+            <strong>Backup & Restore</strong>
+            <small>Export, import, data safety</small>
+        </button>
+    </aside>
 
-        <div class="form-section">
-            <div class="section-heading">
-                <h2>Shop Details</h2>
-                <span>Shown on receipts</span>
+    <div class="settings-panel-stack">
+        <form class="entry-form settings-panel active" method="post" enctype="multipart/form-data" data-settings-panel="shop">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="cropped_logo" data-logo-crop-output>
+            <div class="settings-panel-head">
+                <div>
+                    <p class="eyebrow">Shop Details</p>
+                    <h2>Profile & Receipt Branding</h2>
+                </div>
+                <button class="button primary" type="submit">Save Settings</button>
             </div>
-            <div class="form-grid">
+
+            <div class="settings-form-grid">
                 <label>
                     <span>Shop Name</span>
                     <input type="text" name="shop_name" value="{{ settings.shop_name or '' }}" maxlength="255" required>
@@ -33,25 +59,16 @@
                 <label>
                     <span>Shop Mobile Number</span>
                     <input type="tel" name="phone_number" value="{{ settings.phone_number or '' }}" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="tel" data-phone-input>
-                    <small class="field-hint">Used to verify admin PIN reset.</small>
+                    <small class="field-hint">Used on receipts and shop contact details.</small>
                 </label>
-            </div>
-            <label class="full-field">
-                <span>Address</span>
-                <textarea name="address" rows="3" maxlength="800">{{ settings.address or '' }}</textarea>
-            </label>
-        </div>
-
-        <div class="form-section">
-            <div class="section-heading">
-                <h2>Receipt Branding</h2>
-                <span>Logo and footer note</span>
-            </div>
-            <div class="upload-row">
-                <label class="file-field">
+                <label>
                     <span>Shop Logo</span>
-                    <input id="image" type="file" name="logo" accept="image/png,image/jpeg,image/gif,image/webp">
+                    <input id="image" type="file" name="logo" accept="image/png,image/jpeg,image/gif,image/webp" data-logo-input>
+                    <small class="field-hint">Choose image, adjust crop frame, then apply.</small>
                 </label>
+            </div>
+
+            <div class="settings-logo-row">
                 <div class="image-preview settings-logo-preview" data-image-preview>
                     {% if settings.logo_filename %}
                         <img src="{{ url_for('uploaded_file', filename=settings.logo_filename) }}" alt="Shop logo">
@@ -59,53 +76,55 @@
                         <span>No logo selected</span>
                     {% endif %}
                 </div>
+                <label class="full-field">
+                    <span>Address</span>
+                    <textarea name="address" rows="3" maxlength="800">{{ settings.address or '' }}</textarea>
+                </label>
+                <label class="full-field">
+                    <span>Receipt Note</span>
+                    <textarea name="receipt_note" rows="3" maxlength="500">{{ settings.receipt_note or '' }}</textarea>
+                </label>
             </div>
-            <label class="full-field">
-                <span>Receipt Note</span>
-                <textarea name="receipt_note" rows="3" maxlength="500">{{ settings.receipt_note or '' }}</textarea>
-            </label>
-        </div>
+        </form>
 
-        <div class="form-actions">
-            <button class="button primary" type="submit">Save Settings</button>
-            <a class="button ghost" href="{{ url_for('dashboard') }}">Cancel</a>
-        </div>
-    </form>
-
-    <aside class="settings-side">
-        <section class="settings-card settings-summary">
-            <div class="settings-card-header">
-                <span class="settings-icon">S</span>
+        <section class="settings-panel" data-settings-panel="security" hidden>
+            <div class="settings-panel-head">
                 <div>
-                    <h2>Shop Security</h2>
-                    <p>PIN reset is locked to the saved shop mobile number.</p>
+                    <p class="eyebrow">Security PIN</p>
+                    <h2>{{ 'Reset Admin PIN' if settings.admin_pin else 'Set Admin PIN' }}</h2>
                 </div>
+                <span class="settings-status-pill">Protected</span>
             </div>
-            <dl class="settings-info-list">
-                <div>
-                    <dt>Saved mobile</dt>
-                    <dd>{{ settings.phone_number or 'Not saved' }}</dd>
-                </div>
-                <div>
-                    <dt>Admin PIN</dt>
-                    <dd>Protected</dd>
-                </div>
-            </dl>
+
+            <form class="entry-form settings-inline-form settings-pin-form" method="post" action="{{ url_for('reset_admin_pin') }}" autocomplete="off">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                {% if settings.admin_pin %}
+                    <label>
+                        <span>Current PIN</span>
+                        <input type="password" name="current_pin" inputmode="numeric" pattern="[0-9]{4,12}" minlength="4" maxlength="12" placeholder="Enter old PIN" autocomplete="current-password" required>
+                    </label>
+                {% endif %}
+                <label>
+                    <span>New PIN</span>
+                    <input type="password" name="new_pin" inputmode="numeric" pattern="[0-9]{4,12}" minlength="4" maxlength="12" placeholder="4 to 12 digits" autocomplete="new-password" required>
+                </label>
+                <label>
+                    <span>Confirm New PIN</span>
+                    <input type="password" name="confirm_pin" inputmode="numeric" pattern="[0-9]{4,12}" minlength="4" maxlength="12" placeholder="Repeat PIN" autocomplete="new-password" required>
+                </label>
+                <button class="button primary" type="submit">{{ 'Reset PIN' if settings.admin_pin else 'Set PIN' }}</button>
+            </form>
         </section>
 
-        <section class="settings-card license-info-card">
-            <div class="settings-card-header">
-                <span class="settings-icon">L</span>
+        <section class="settings-panel" data-settings-panel="license" hidden>
+            <div class="settings-panel-head">
                 <div>
-                    <h2>License</h2>
-                    <p>Offline one-device activation for this PC.</p>
+                    <p class="eyebrow">Offline License</p>
+                    <h2>License Information</h2>
                 </div>
+                <span class="settings-status-pill {{ 'success' if license.valid else 'danger' }}">{{ 'Activated' if license.valid else 'Not activated' }}</span>
             </div>
-            <dl class="settings-info-list">
-                <div>
-                    <dt>Status</dt>
-                    <dd>{{ 'Activated' if license.valid else 'Not activated' }}</dd>
-                </div>
+            <dl class="settings-info-list compact-info-list">
                 <div>
                     <dt>Customer</dt>
                     <dd>{{ license.payload.customerName if license.valid and license.payload else 'Not available' }}</dd>
@@ -130,35 +149,57 @@
             <button class="button ghost" type="button" data-copy-source="[data-copy-text]">Copy Device Code</button>
         </section>
 
-        <form class="settings-card pin-reset-card" method="post" action="{{ url_for('reset_admin_pin') }}" autocomplete="off">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
-            <div class="section-heading stacked-heading">
-                <h2>Reset Admin PIN</h2>
-                <span>Verify by mobile number</span>
+        <section class="settings-panel" data-settings-panel="backup" hidden>
+            <div class="settings-panel-head">
+                <div>
+                    <p class="eyebrow">Data Safety</p>
+                    <h2>Backup & Restore</h2>
+                </div>
             </div>
-            <label>
-                <span>Registered Mobile Number</span>
-                <input type="tel" name="registered_mobile" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" placeholder="Enter saved shop mobile" data-phone-input required>
-            </label>
-            <label>
-                <span>New PIN</span>
-                <input type="password" name="new_pin" inputmode="numeric" pattern="[0-9]{4,12}" minlength="4" maxlength="12" placeholder="4 to 12 digits" autocomplete="new-password" required>
-            </label>
-            <label>
-                <span>Confirm New PIN</span>
-                <input type="password" name="confirm_pin" inputmode="numeric" pattern="[0-9]{4,12}" minlength="4" maxlength="12" placeholder="Repeat PIN" autocomplete="new-password" required>
-            </label>
-            <button class="button primary" type="submit">Reset PIN</button>
-        </form>
-
-        <section class="settings-card backup-card">
-            <div class="section-heading stacked-heading">
-                <h2>Data Safety</h2>
-                <span>Local database and uploads</span>
+            <div class="settings-backup-actions">
+                <a class="button primary" href="{{ url_for('backup') }}#export">Export Backup</a>
+                <a class="button ghost" href="{{ url_for('backup') }}#import">Import Backup</a>
+                <a class="button ghost" href="{{ url_for('backup') }}">Open Backup Page</a>
             </div>
-            <p>Download a ZIP backup before big changes or restore old local data when needed.</p>
-            <a class="button ghost" href="{{ url_for('backup') }}">Open Backup</a>
+            <div class="settings-backup-grid">
+                <article>
+                    <strong>Export backup</strong>
+                    <p>Create a ZIP with database records and related media for transfer or safety.</p>
+                </article>
+                <article>
+                    <strong>Import backup</strong>
+                    <p>Restore data on another PC. License still validates against the current device.</p>
+                </article>
+                <article>
+                    <strong>Runtime data</strong>
+                    <p>The packaged app stores user data locally, not inside the shareable EXE.</p>
+                </article>
+            </div>
         </section>
-    </aside>
+    </div>
 </section>
+
+<div class="logo-crop-modal" data-logo-crop-modal hidden>
+    <div class="logo-crop-backdrop" data-logo-crop-cancel></div>
+    <div class="logo-crop-card" role="dialog" aria-modal="true" aria-label="Crop shop logo">
+        <div class="logo-crop-head">
+            <div>
+                <p class="eyebrow">Shop Logo</p>
+                <h2>Select Logo Area</h2>
+            </div>
+            <button class="media-lightbox-close" type="button" data-logo-crop-cancel aria-label="Close logo cropper">&times;</button>
+        </div>
+        <div class="logo-crop-stage" data-logo-crop-stage>
+            <img alt="Logo crop preview" data-logo-crop-image>
+        </div>
+        <label class="logo-crop-zoom">
+            <span>Zoom</span>
+            <input type="range" min="1" max="3" step="0.01" value="1" data-logo-crop-zoom>
+        </label>
+        <div class="logo-crop-actions">
+            <button class="button ghost" type="button" data-logo-crop-cancel>Cancel</button>
+            <button class="button primary" type="button" data-logo-crop-apply>Apply Crop</button>
+        </div>
+    </div>
+</div>
 {% endblock %}

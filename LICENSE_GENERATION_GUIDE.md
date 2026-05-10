@@ -91,7 +91,9 @@ PowerShell command to create `LICENSE_PRIVATE_KEY_BASE64`:
 [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Content license-secrets\license-private.pem -Raw)))
 ```
 
-After deployment, open the website, enter the admin token, paste the Android or PC device code, choose the platform, enter shop name, and generate the license key.
+After deployment, open the website, enter the admin token, paste the Android or PC device code, choose the platform, enter shop name, and generate the license key. The website accepts the raw code or full shared text like `Device Code: RWND-...`.
+
+The website also has a `Create Test Device Code` button for checking the generator UI. Use that only for website testing; real app activation must use the real code shown on the customer's phone or PC.
 
 Important: the private key must stay only in Vercel environment variables or your local `license-secrets/` folder. Never put the private key in frontend code.
 

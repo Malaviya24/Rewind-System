@@ -13,7 +13,7 @@
 </section>
 
 <section class="content-grid">
-    <form class="panel action-panel" method="post" action="{{ url_for('download_backup') }}">
+    <form id="export" class="panel action-panel" method="post" action="{{ url_for('download_backup') }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
         <h2>Create Backup</h2>
         <p>Save repair data, workers, attendance, payments, shop details, and related media. License data is never exported.</p>
@@ -31,7 +31,7 @@
         <button class="button primary" type="submit">Download Backup</button>
     </form>
 
-    <form class="panel action-panel" method="post" action="{{ url_for('restore_backup') }}" enctype="multipart/form-data" data-confirm="Restore this backup? Current data will be backed up first.">
+    <form id="import" class="panel action-panel" method="post" action="{{ url_for('restore_backup') }}" enctype="multipart/form-data" data-confirm="Restore this backup? Current data will be backed up first.">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
         <h2>Restore Backup</h2>
         <label>

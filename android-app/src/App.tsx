@@ -37,7 +37,7 @@ import {
   updateMotorPayment,
   updateMotorStatus
 } from "@/db/repositories";
-import { AttendanceStatus, BackupManifest, BackupRange, DashboardSummary, MotorWithMedia, RepairStatus, ShopSettings, Worker, WorkerAttendanceRow, WorkerSalaryPayment, repairStatuses } from "@/models/types";
+import { AttendanceStatus, BackupImportStats, BackupManifest, BackupRange, DashboardSummary, MotorWithMedia, RepairStatus, ShopSettings, Worker, WorkerAttendanceRow, WorkerSalaryPayment, repairStatuses } from "@/models/types";
 import { captureMotorPhoto, deleteLocalFiles, pickMotorMedia, pickShopLogo } from "@/services/mediaService";
 import { activateLicenseKey, getLicenseStatus, LicenseStatus } from "@/services/license";
 import { colors } from "@/theme/colors";
@@ -1256,7 +1256,7 @@ function WorkersScreen({ onNavigate, refreshKey, onChanged }: { onNavigate: (scr
   const [salary, setSalary] = useState("");
   const [salaryPaymentAmount, setSalaryPaymentAmount] = useState("");
   const [salaryPaymentDate, setSalaryPaymentDate] = useState(todayIso());
-  const [salaryPaymentType, setSalaryPaymentType] = useState("Advance");
+  const [salaryPaymentType, setSalaryPaymentType] = useState<"Advance" | "Paid">("Advance");
   const [salaryPaymentNote, setSalaryPaymentNote] = useState("");
   const [selectedWorkerUuid, setSelectedWorkerUuid] = useState<string | null>(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<{ workerUuid: string; workerName: string; date: string; status?: AttendanceStatus } | null>(null);
@@ -1331,8 +1331,7 @@ function WorkersScreen({ onNavigate, refreshKey, onChanged }: { onNavigate: (scr
       return;
     }
     try {
-      const note = `${salaryPaymentType}${salaryPaymentNote.trim() ? ` - ${salaryPaymentNote.trim()}` : ""}`;
-      await saveWorkerSalaryPayment(workerUuid, amount, salaryPaymentDate || todayIso(), note);
+      await saveWorkerSalaryPayment(workerUuid, amount, salaryPaymentDate || todayIso(), salaryPaymentNote.trim(), salaryPaymentType);
       setSalaryPaymentAmount("");
       setSalaryPaymentNote("");
       setSalaryPayments(await listWorkerSalaryPaymentsForMonth((salaryPaymentDate || todayIso()).slice(0, 7)));
@@ -1367,7 +1366,7 @@ function WorkersScreen({ onNavigate, refreshKey, onChanged }: { onNavigate: (scr
     const deductionSalary = Math.round(daySalary * deductedDays);
     const unmarkedSalary = Math.max(worker.monthlySalary - payableSalary - deductionSalary, 0);
     const salaryPaid = salaryPayments.filter((item) => item.workerUuid === worker.uuid).reduce((total, item) => total + item.amount, 0);
-    const salaryBalance = Math.max(payableSalary - salaryPaid, 0);
+    const salaryBalance = payableSalary - salaryPaid;
     return {
       worker,
       present,
@@ -1450,7 +1449,7 @@ function WorkersScreen({ onNavigate, refreshKey, onChanged }: { onNavigate: (scr
             <SalaryMetric label="Payable" value={money(payableSalary)} tone="present" compact />
             <SalaryMetric label="Deduct" value={money(deductionSalary)} tone="absent" compact />
             <SalaryMetric label="Advance/Paid" value={money(salaryPaid)} tone="present" compact />
-            <SalaryMetric label="Balance" value={money(salaryBalance)} compact />
+            <SalaryMetric label={salaryBalanceLabel(salaryBalance)} value={money(salaryBalance)} tone={salaryBalanceTone(salaryBalance)} compact />
           </View>
           <AttendanceCalendar
             cells={calendar}
@@ -1465,25 +1464,25 @@ function WorkersScreen({ onNavigate, refreshKey, onChanged }: { onNavigate: (scr
               <Text style={styles.panelTitle}>Salary advance</Text>
               <Text style={styles.panelHint}>Manual money taken by this worker in {displayMonth(reportMonth)}.</Text>
             </View>
-            <View style={styles.salaryBalanceBadge}>
-              <Text style={styles.salaryMetricLabel}>Balance</Text>
+            <View style={[styles.salaryBalanceBadge, salaryBalance < 0 && styles.salaryBalanceExtraBadge]}>
+              <Text style={styles.salaryMetricLabel}>{salaryBalanceLabel(salaryBalance)}</Text>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.66} style={styles.workerSalary}>{money(salaryBalance)}</Text>
             </View>
           </View>
           <View style={styles.compactFormGrid}>
-            <SelectField label="Type" value={salaryPaymentType} options={["Advance", "Salary Paid"]} onChange={setSalaryPaymentType} />
+            <SelectField label="Type" value={salaryPaymentType} options={["Advance", "Paid"]} onChange={(value) => setSalaryPaymentType(value as "Advance" | "Paid")} />
             <Field label="Amount" value={salaryPaymentAmount} onChangeText={setSalaryPaymentAmount} keyboardType="numeric" />
             <DatePickerField label="Date" value={salaryPaymentDate} mode="date" onChange={setSalaryPaymentDate} />
             <Field label="Note" value={salaryPaymentNote} onChangeText={setSalaryPaymentNote} />
           </View>
-          <Button variant="primary" onPress={() => addSalaryPayment(worker.uuid)}>Add Salary Advance</Button>
+          <Button variant="primary" onPress={() => addSalaryPayment(worker.uuid)}>Add Worker Payment</Button>
           <View style={styles.salaryPaymentList}>
             {payments.length ? (
               payments.map((payment) => (
                 <View key={payment.uuid} style={styles.salaryPaymentRow}>
                   <View style={styles.body}>
                     <Text style={styles.salaryPaymentAmount}>{money(payment.amount)}</Text>
-                    <Text numberOfLines={1} style={styles.panelHint}>{payment.note || "Salary advance"}</Text>
+                    <Text numberOfLines={1} style={styles.panelHint}>{payment.paymentType}{payment.note ? ` - ${payment.note}` : ""}</Text>
                   </View>
                   <Text style={styles.salaryPaymentDate}>{displayDate(payment.paymentDate)}</Text>
                 </View>
@@ -1529,7 +1528,7 @@ function WorkersScreen({ onNavigate, refreshKey, onChanged }: { onNavigate: (scr
           <SalaryMetric label="Payable" value={money(totalPayableSalary)} tone="present" />
           <SalaryMetric label="Deduction" value={money(totalDeductionSalary)} tone="absent" />
           <SalaryMetric label="Advance/Paid" value={money(totalSalaryPaid)} tone="present" />
-          <SalaryMetric label="Balance" value={money(totalSalaryBalance)} />
+          <SalaryMetric label={salaryBalanceLabel(totalSalaryBalance)} value={money(totalSalaryBalance)} tone={salaryBalanceTone(totalSalaryBalance)} />
         </View>
         <View style={styles.monthTotals}>
           <AttendanceMetric label="Present" value={monthPresent} tone="present" compact />
@@ -1563,7 +1562,7 @@ function WorkersScreen({ onNavigate, refreshKey, onChanged }: { onNavigate: (scr
                   <SalaryMetric label="Payable" value={money(payableSalary)} tone="present" compact />
                   <SalaryMetric label="Deduct" value={money(deductionSalary)} tone="absent" compact />
                   <SalaryMetric label="Advance" value={money(salaryPaid)} tone="present" compact />
-                  <SalaryMetric label="Balance" value={money(salaryBalance)} compact />
+                  <SalaryMetric label={salaryBalanceLabel(salaryBalance)} value={money(salaryBalance)} tone={salaryBalanceTone(salaryBalance)} compact />
                 </View>
                 <View style={styles.workerOpenRow}>
                   <Text style={styles.workerOpenText}>Open details and attendance</Text>
@@ -1823,9 +1822,29 @@ function AttendanceMetric({ label, value, tone, compact }: { label: string; valu
   );
 }
 
-function SalaryMetric({ label, value, tone, compact }: { label: string; value: string; tone?: "present" | "absent"; compact?: boolean }) {
+function salaryBalanceLabel(balance: number) {
+  if (balance < 0) {
+    return "Advance extra";
+  }
+  if (balance > 0) {
+    return "To pay";
+  }
+  return "Settled";
+}
+
+function salaryBalanceTone(balance: number): "present" | "absent" | "warning" {
+  if (balance < 0) {
+    return "warning";
+  }
+  if (balance === 0) {
+    return "present";
+  }
+  return "absent";
+}
+
+function SalaryMetric({ label, value, tone, compact }: { label: string; value: string; tone?: "present" | "absent" | "warning"; compact?: boolean }) {
   return (
-    <View style={[styles.salaryMetric, compact && styles.salaryMetricCompact, tone === "present" && styles.salaryMetricPresent, tone === "absent" && styles.salaryMetricAbsent]}>
+    <View style={[styles.salaryMetric, compact && styles.salaryMetricCompact, tone === "present" && styles.salaryMetricPresent, tone === "absent" && styles.salaryMetricAbsent, tone === "warning" && styles.salaryMetricWarning]}>
       <Text numberOfLines={1} ellipsizeMode="tail" style={styles.salaryMetricLabel}>{label}</Text>
       <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.62} style={styles.salaryMetricValue}>{value}</Text>
     </View>
@@ -1943,7 +1962,7 @@ function BackupScreen({ onNavigate }: { onNavigate: (screen: ScreenName) => void
       setImportBusy(true);
       const result = await importLatestBackupFromPickedFolder();
       setManifest(result.manifest);
-      Alert.alert("Import complete", `Imported backup from ${displayDate(result.manifest.createdAt.slice(0, 10))}.`);
+      Alert.alert("Import complete", formatImportStats(result.stats));
     } catch (err) {
       Alert.alert("Import failed", err instanceof Error ? err.message : "Could not import backup.");
     } finally {
@@ -1978,7 +1997,7 @@ function BackupScreen({ onNavigate }: { onNavigate: (screen: ScreenName) => void
       {manifest ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Last manifest</Text>
-          <Text style={styles.problem}>Device: {manifest.deviceId}</Text>
+          <Text style={styles.problem}>Source: {manifest.deviceId || manifest.platform || "Backup file"}</Text>
           <Text style={styles.problem}>Motors: {manifest.counts.motors}</Text>
           <Text style={styles.problem}>Customers: {manifest.counts.customers}</Text>
           <Text style={styles.problem}>Workers: {manifest.counts.workers}</Text>
@@ -2089,7 +2108,7 @@ function SettingsScreen({ onNavigate }: { onNavigate: (screen: ScreenName) => vo
       setImportBusy(true);
       const result = await importLatestBackupFromPickedFolder();
       setManifest(result.manifest);
-      Alert.alert("Import complete", `Imported backup from ${displayDate(result.manifest.createdAt.slice(0, 10))}.`);
+      Alert.alert("Import complete", formatImportStats(result.stats));
     } catch (err) {
       Alert.alert("Import failed", err instanceof Error ? err.message : "Could not import backup.");
     } finally {
@@ -2153,7 +2172,7 @@ function SettingsScreen({ onNavigate }: { onNavigate: (screen: ScreenName) => vo
       {manifest ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Last backup</Text>
-          <Text style={styles.problem}>Device: {manifest.deviceId}</Text>
+          <Text style={styles.problem}>Source: {manifest.deviceId || manifest.platform || "Backup file"}</Text>
           <Text style={styles.problem}>Motors: {manifest.counts.motors}</Text>
           <Text style={styles.problem}>Customers: {manifest.counts.customers}</Text>
           <Text style={styles.problem}>Workers: {manifest.counts.workers}</Text>
@@ -2216,6 +2235,27 @@ function validateRange(startDate: string, endDate: string): BackupRange {
     throw new Error("Start date must be before end date.");
   }
   return { startDate: start, endDate: end };
+}
+
+function formatImportStats(stats: BackupImportStats) {
+  const total =
+    stats.motors +
+    stats.customers +
+    stats.workers +
+    stats.attendance +
+    stats.salaryPayments +
+    stats.media;
+  if (!total) {
+    return "Backup is valid, but no records were imported.";
+  }
+  return [
+    `Motors: ${stats.motors}`,
+    `Customers: ${stats.customers}`,
+    `Workers: ${stats.workers}`,
+    `Attendance: ${stats.attendance}`,
+    `Salary payments: ${stats.salaryPayments}`,
+    `Media files: ${stats.media}`
+  ].join("\n");
 }
 
 function isValidIsoDate(value: string) {
@@ -3182,6 +3222,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.successSoft,
     padding: spacing.sm
   },
+  salaryBalanceExtraBadge: {
+    borderColor: "rgba(169,106,0,0.28)",
+    backgroundColor: colors.warningSoft
+  },
   monthStat: {
     minWidth: 58,
     borderRadius: radius.pill,
@@ -3363,6 +3407,10 @@ const styles = StyleSheet.create({
   salaryMetricAbsent: {
     borderColor: "rgba(180,35,24,0.24)",
     backgroundColor: colors.dangerSoft
+  },
+  salaryMetricWarning: {
+    borderColor: "rgba(169,106,0,0.28)",
+    backgroundColor: colors.warningSoft
   },
   salaryMetricLabel: {
     ...typography.label,

@@ -47,7 +47,15 @@ function normalizePrivateKey(value) {
 }
 
 function getPrivateKey() {
-  return normalizePrivateKey(process.env.LICENSE_PRIVATE_KEY || process.env.LICENSE_PRIVATE_KEY_BASE64 || "");
+  const privateKey = normalizePrivateKey(process.env.LICENSE_PRIVATE_KEY || process.env.LICENSE_PRIVATE_KEY_BASE64 || "");
+  if (!privateKey) {
+    return "";
+  }
+  try {
+    return crypto.createPrivateKey(privateKey);
+  } catch {
+    throw new Error("Server private key is invalid. Check LICENSE_PRIVATE_KEY_BASE64 in Vercel.");
+  }
 }
 
 function getBearerToken(req) {
@@ -73,7 +81,9 @@ function assertAdmin(req) {
 }
 
 function normalizeDeviceId(value) {
-  return String(value || "").trim().toUpperCase();
+  const raw = String(value || "").trim().toUpperCase();
+  const extracted = raw.match(/\bRWND(?:-PC)?-[A-Z0-9]{4}(?:-[A-Z0-9]{4}){5}\b/);
+  return (extracted ? extracted[0] : raw).replace(/\s+/g, "");
 }
 
 function validateInput(body) {

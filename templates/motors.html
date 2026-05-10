@@ -236,21 +236,7 @@
                         <div>
                             <dt>Payment</dt>
                             <dd>
-                                <div class="payment-quick-control">
-                                    <span class="payment-badge {{ motor.payment_status|status_slug }}">{{ motor.payment_status }}</span>
-                                    <div class="payment-switch" aria-label="Quick payment status">
-                                        <form method="post" action="{{ url_for('update_motor_payment', motor_id=motor.id) }}">
-                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
-                                            <input type="hidden" name="payment_status" value="Unpaid">
-                                            <button class="payment-switch-button unpaid {{ 'active' if motor.payment_status == 'Unpaid' else '' }}" type="submit" {{ 'disabled' if motor.payment_status == 'Unpaid' else '' }}>Unpaid</button>
-                                        </form>
-                                        <form method="post" action="{{ url_for('update_motor_payment', motor_id=motor.id) }}">
-                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
-                                            <input type="hidden" name="payment_status" value="Paid">
-                                            <button class="payment-switch-button paid {{ 'active' if motor.payment_status == 'Paid' else '' }}" type="submit" {{ 'disabled' if motor.payment_status == 'Paid' else '' }}>Paid</button>
-                                        </form>
-                                    </div>
-                                </div>
+                                <span class="payment-badge {{ motor.payment_status|status_slug }}">{{ motor.payment_status }}</span>
                             </dd>
                         </div>
                         <div>
@@ -276,6 +262,24 @@
                                 >
                                     {% for status in repair_statuses %}
                                         <option value="{{ status }}" {{ 'selected' if motor.status == status else '' }}>{{ status }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <button class="button small status-quick-button" type="submit">Save</button>
+                        </form>
+                        <form class="status-quick-form payment-select-form" method="post" action="{{ url_for('update_motor_payment', motor_id=motor.id) }}">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                            <label class="status-quick-label">
+                                <span>Payment</span>
+                                <select
+                                    class="status-quick-select payment-status-select {{ motor.payment_status|status_slug }}"
+                                    name="payment_status"
+                                    aria-label="Change payment status for {{ motor.job_number }}"
+                                    autocomplete="off"
+                                    onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"
+                                >
+                                    {% for payment_status in payment_statuses %}
+                                        <option value="{{ payment_status }}" {{ 'selected' if motor.payment_status == payment_status else '' }}>{{ payment_status }}</option>
                                     {% endfor %}
                                 </select>
                             </label>
