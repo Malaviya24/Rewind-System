@@ -21,7 +21,6 @@
             <nav class="nav-links" aria-label="Main navigation">
                 <a data-icon="D" class="{{ 'active' if request.endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">Dashboard</a>
                 <a data-icon="M" class="{{ 'active' if request.endpoint == 'motors' else '' }}" href="{{ url_for('motors') }}">Motors</a>
-                <a data-icon="I" class="{{ 'active' if request.endpoint in ['invoices', 'new_invoice', 'edit_invoice', 'view_invoice'] else '' }}" href="{{ url_for('invoices') }}">Invoices</a>
                 <a data-icon="C" class="{{ 'active' if request.endpoint == 'customers' else '' }}" href="{{ url_for('customers') }}">Customers</a>
                 <a data-icon="W" class="{{ 'active' if request.endpoint in ['workers', 'add_worker', 'mark_worker_attendance', 'toggle_worker'] else '' }}" href="{{ url_for('workers') }}">Workers</a>
                 <a data-icon="S" class="{{ 'active' if request.endpoint in ['settings', 'reset_admin_pin', 'backup'] else '' }}" href="{{ url_for('settings') }}">Settings</a>

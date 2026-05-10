@@ -10,7 +10,6 @@
         <p>Monitor repair load, overdue work, pending payments, customers, workers, and daily cash flow from one control screen.</p>
         <div class="dashboard-command-actions">
             <a class="button primary" href="{{ url_for('add_motor') }}">Add Motor</a>
-            <a class="button" href="{{ url_for('new_invoice') }}">New Invoice</a>
             <a class="button ghost" href="{{ url_for('motors', filter='overdue') }}">Overdue Jobs</a>
         </div>
     </div>
@@ -326,14 +325,10 @@
                 <strong>Add repair job</strong>
                 <small>Customer, motor details, media, cost, and deadline.</small>
             </a>
-            <a href="{{ url_for('new_invoice') }}">
-                <strong>Create blank invoice</strong>
-                <small>Build a professional invoice with custom line items.</small>
-            </a>
             {% for motor in recent_motors[:3] %}
-                <a href="{{ url_for('new_invoice', motor_id=motor.id) }}">
-                    <strong>Invoice {{ motor.job_number }}</strong>
-                    <small>{{ motor.customer_name }} - {{ motor.motor_type }}</small>
+                <a href="{{ url_for('edit_motor', motor_id=motor.id) }}">
+                    <strong>Open {{ motor.job_number }}</strong>
+                    <small>{{ motor.customer_name }} - {{ motor.motor_type }} - {{ motor.status }}</small>
                 </a>
             {% endfor %}
         </div>

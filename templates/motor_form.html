@@ -29,7 +29,7 @@
             </label>
             <label>
                 <span>Phone Number</span>
-                <input type="tel" name="phone_number" value="{{ motor.phone_number }}" maxlength="20" required>
+                <input type="tel" name="phone_number" value="{{ motor.phone_number }}" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="tel" data-phone-input required>
             </label>
         </div>
     </div>

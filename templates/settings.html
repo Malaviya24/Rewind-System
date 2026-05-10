@@ -32,7 +32,7 @@
                 </label>
                 <label>
                     <span>Shop Mobile Number</span>
-                    <input type="tel" name="phone_number" value="{{ settings.phone_number or '' }}" maxlength="30" inputmode="tel">
+                    <input type="tel" name="phone_number" value="{{ settings.phone_number or '' }}" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="tel" data-phone-input>
                     <small class="field-hint">Used to verify admin PIN reset.</small>
                 </label>
             </div>
@@ -138,7 +138,7 @@
             </div>
             <label>
                 <span>Registered Mobile Number</span>
-                <input type="tel" name="registered_mobile" maxlength="30" inputmode="tel" placeholder="Enter saved shop mobile" required>
+                <input type="tel" name="registered_mobile" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" placeholder="Enter saved shop mobile" data-phone-input required>
             </label>
             <label>
                 <span>New PIN</span>

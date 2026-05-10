@@ -78,6 +78,28 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    document.querySelectorAll("[data-phone-input]").forEach((input) => {
+        const normalizePhone = () => {
+            input.value = (input.value || "").replace(/\D/g, "").slice(0, 10);
+            input.setCustomValidity("");
+        };
+        input.addEventListener("input", normalizePhone);
+        input.addEventListener("paste", () => window.setTimeout(normalizePhone, 0));
+        input.closest("form")?.addEventListener("submit", (event) => {
+            normalizePhone();
+            if (input.required && input.value.length !== 10) {
+                input.setCustomValidity("Enter exactly 10 digits.");
+            } else if (input.value && input.value.length !== 10) {
+                input.setCustomValidity("Enter exactly 10 digits or leave it blank.");
+            } else {
+                input.setCustomValidity("");
+            }
+            if (!input.reportValidity()) {
+                event.preventDefault();
+            }
+        });
+    });
+
     document.querySelectorAll("[data-period-filter]").forEach((form) => {
         const select = form.querySelector("[data-period-select]");
         const inputs = Array.from(form.querySelectorAll("[data-period-input]"));

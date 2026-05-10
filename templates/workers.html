@@ -57,7 +57,7 @@
     <article class="worker-metric money">
         <span>Salary this month</span>
         <strong>{{ worker_summary.period_salary_total|money }}</strong>
-        <small>{{ worker_summary.period_deduction_total|money }} deducted</small>
+        <small>{{ worker_summary.period_paid_total|money }} paid - {{ worker_summary.period_balance_total|money }} balance</small>
     </article>
 </section>
 
@@ -197,7 +197,7 @@
                 </label>
                 <label>
                     <span>Phone</span>
-                    <input type="tel" name="phone_number" maxlength="30">
+                    <input type="tel" name="phone_number" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" data-phone-input>
                 </label>
                 <label>
                     <span>Role</span>
@@ -223,6 +223,14 @@
                 <div>
                     <dt>Month deduction</dt>
                     <dd>{{ worker_summary.period_deduction_total|money }}</dd>
+                </div>
+                <div>
+                    <dt>Paid / advance</dt>
+                    <dd>{{ worker_summary.period_paid_total|money }}</dd>
+                </div>
+                <div>
+                    <dt>Balance</dt>
+                    <dd>{{ worker_summary.period_balance_total|money }}</dd>
                 </div>
                 <div>
                     <dt>Tracked days</dt>
@@ -269,6 +277,9 @@
                         <th>Absent</th>
                         <th>Earned</th>
                         <th>Deducted</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
+                        <th>Payment</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -302,6 +313,25 @@
                             <td class="summary-count absent">{{ worker.absent_days or 0 }}</td>
                             <td class="summary-money">{{ worker.salary_earned|money }}</td>
                             <td class="summary-money danger-text">{{ worker.salary_deducted|money }}</td>
+                            <td class="summary-money">{{ worker.salary_paid|money }}</td>
+                            <td class="summary-money">{{ worker.salary_balance|money }}</td>
+                            <td class="worker-payment-cell">
+                                <form class="worker-payment-form" method="post" action="{{ url_for('add_worker_salary_payment', worker_id=worker.id) }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                    <input type="hidden" name="attendance_month" value="{{ attendance_month }}">
+                                    <input type="date" name="payment_date" value="{{ today }}" aria-label="Payment date for {{ worker.name }}" required>
+                                    <input type="number" name="amount" min="0.01" max="10000000" step="0.01" placeholder="Amount" aria-label="Payment amount for {{ worker.name }}" required>
+                                    <input type="text" name="note" maxlength="255" placeholder="Note" aria-label="Payment note for {{ worker.name }}">
+                                    <button class="button small" type="submit">Add Paid</button>
+                                </form>
+                                {% if worker.salary_payments %}
+                                    <div class="worker-payment-history">
+                                        {% for payment in worker.salary_payments %}
+                                            <small>{{ payment.payment_date|display_date }} - {{ payment.amount|money }}</small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>

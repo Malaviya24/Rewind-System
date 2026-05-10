@@ -20,6 +20,363 @@
     --shadow-3: 0 14px 34px rgba(60, 64, 67, 0.16);
 }
 
+/* Android parity production pass: PC screens aligned with the mobile workflow */
+@media screen {
+    :root {
+        --bg: #f5f5f5;
+        --surface: #ffffff;
+        --surface-soft: #f7f7f7;
+        --text: #101114;
+        --muted: #666a70;
+        --line: #d9d9d9;
+        --primary: #c72c41;
+        --primary-dark: #a50034;
+        --primary-soft: #fae8ec;
+        --success: #15803d;
+        --success-soft: #eaf7ef;
+        --warning: #a16207;
+        --warning-soft: #fff7df;
+        --danger: #be123c;
+        --danger-soft: #fff1f2;
+        --radius-card: 22px;
+        --radius-soft: 16px;
+        --radius-pill: 999px;
+    }
+
+    body {
+        background: var(--bg);
+        color: var(--text);
+    }
+
+    .page {
+        width: min(1420px, 100%);
+        padding-top: 24px;
+    }
+
+    .brand-mark,
+    .button.primary,
+    .nav-add-button {
+        background: var(--primary);
+        color: #ffffff;
+    }
+
+    .nav-links a[href*="invoice"],
+    .dashboard-action-list a[href*="invoice"],
+    .dashboard-command-actions a[href*="invoice"] {
+        display: none !important;
+    }
+
+    .app-header {
+        background: rgba(255, 255, 255, 0.94);
+        border-bottom-color: var(--line);
+    }
+
+    .nav-links {
+        padding: 7px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #ffffff;
+        box-shadow: 0 18px 42px -34px rgba(16, 17, 20, 0.28);
+    }
+
+    .nav-links > a:not(.button) {
+        border-radius: 999px;
+    }
+
+    .nav-links > a.active,
+    .nav-links > a:hover {
+        background: var(--primary-soft);
+        color: var(--primary-dark);
+    }
+
+    .page-title h1,
+    .dashboard-command-copy h1,
+    .motor-command h1,
+    .workers-command h1 {
+        color: var(--text);
+        font-size: clamp(42px, 5vw, 62px);
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 0.98;
+    }
+
+    .dashboard-command-copy,
+    .dashboard-today-card,
+    .dashboard-kpi-card,
+    .dashboard-panel,
+    .motor-command,
+    .motor-filter-panel,
+    .motor-summary-card,
+    .motor-card,
+    .workers-command,
+    .workers-month-panel,
+    .ops-panel,
+    .worker-metric,
+    .settings-card,
+    .entry-form {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-card);
+        background: var(--surface);
+        box-shadow: 0 12px 30px -26px rgba(16, 17, 20, 0.34);
+    }
+
+    .dashboard-kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .dashboard-kpi-card {
+        min-height: 132px;
+        border-radius: 8px;
+    }
+
+    .dashboard-kpi-card strong {
+        font-size: clamp(30px, 3vw, 44px);
+    }
+
+    .dashboard-list-item,
+    .dashboard-action-list a {
+        border-radius: 8px;
+        background: var(--surface-soft);
+    }
+
+    .dashboard-thumb {
+        width: 70px;
+        height: 70px;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    .dashboard-thumb img,
+    .dashboard-thumb video {
+        object-fit: contain;
+        background: #ffffff;
+    }
+
+    body[data-page="motors"] .motor-card {
+        grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    body[data-page="motors"] .motor-image.motor-media {
+        min-height: 330px;
+        padding: 12px;
+        border-radius: 8px;
+        background: #f3f3f3;
+    }
+
+    body[data-page="motors"] .primary-media {
+        min-height: 260px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    .motor-image img,
+    .motor-image video,
+    .primary-media img,
+    .primary-media video,
+    .media-thumb img,
+    .existing-media-preview img,
+    .existing-media-preview video,
+    .media-preview-card img,
+    .media-preview-card video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+        background: #ffffff;
+    }
+
+    .media-strip {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .media-thumb,
+    .existing-media-card,
+    .media-preview-card {
+        border-radius: 8px;
+    }
+
+    .payment-switch {
+        display: inline-grid;
+        grid-template-columns: repeat(2, minmax(74px, 1fr));
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #ffffff;
+    }
+
+    .payment-switch-button {
+        min-height: 34px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+    }
+
+    .payment-switch-button.unpaid.active,
+    .payment-badge.unpaid {
+        background: var(--danger-soft);
+        color: var(--danger);
+    }
+
+    .payment-switch-button.paid.active,
+    .payment-badge.paid {
+        background: var(--success-soft);
+        color: var(--success);
+    }
+
+    .payment-badge.partial {
+        background: var(--warning-soft);
+        color: var(--warning);
+    }
+
+    .status-badge,
+    .payment-badge,
+    .overdue-alert {
+        border-radius: 999px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+    }
+
+    .media-lightbox {
+        padding: 18px;
+    }
+
+    .media-lightbox-panel {
+        width: min(1500px, calc(100vw - 36px));
+        height: min(920px, calc(100dvh - 36px));
+        border-radius: 18px;
+        background: #ffffff;
+    }
+
+    .media-lightbox-stage {
+        overflow: hidden;
+        border-radius: 12px;
+        background: #111111;
+    }
+
+    .media-lightbox-stage img,
+    .media-lightbox-stage video {
+        width: auto !important;
+        height: auto !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: contain !important;
+        background: #111111;
+    }
+
+    .media-lightbox-tools {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px;
+        background: #ffffff;
+    }
+
+    .settings-layout {
+        grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+    }
+
+    .settings-card {
+        border-radius: 8px;
+    }
+
+    .settings-card-header {
+        align-items: center;
+    }
+
+    .settings-icon {
+        border-radius: 16px;
+        background: var(--primary);
+        color: #ffffff;
+    }
+
+    body[data-page="workers"] .worker-metric-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    body[data-page="workers"] .worker-row {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        background: #ffffff;
+    }
+
+    body[data-page="workers"] .worker-list {
+        gap: 12px;
+    }
+
+    body[data-page="workers"] .attendance-table-wrap {
+        border-radius: 8px;
+    }
+
+    .worker-payment-cell {
+        min-width: 280px;
+    }
+
+    .worker-payment-form {
+        display: grid;
+        grid-template-columns: 140px 120px minmax(120px, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .worker-payment-form input {
+        min-height: 38px;
+        padding: 8px 10px;
+    }
+
+    .worker-payment-history {
+        display: grid;
+        gap: 2px;
+        margin-top: 7px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    input[data-phone-input] {
+        letter-spacing: 0.04em;
+    }
+}
+
+@media screen and (max-width: 1180px) {
+    .dashboard-kpi-grid,
+    body[data-page="workers"] .worker-metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    body[data-page="motors"] .motor-card,
+    .settings-layout {
+        grid-template-columns: 1fr;
+    }
+
+    body[data-page="motors"] .motor-image.motor-media {
+        min-height: 300px;
+    }
+}
+
+@media screen and (max-width: 760px) {
+    .dashboard-kpi-grid,
+    body[data-page="workers"] .worker-metric-grid,
+    .worker-payment-form {
+        grid-template-columns: 1fr;
+    }
+
+    .media-lightbox {
+        padding: 8px;
+    }
+
+    .media-lightbox-panel {
+        width: calc(100vw - 16px);
+        height: calc(100dvh - 16px);
+        border-radius: 14px;
+    }
+}
+
 /* Production PC licensing and date-range polish */
 .activation-page-shell {
     min-height: 100vh;
@@ -8485,5 +8842,229 @@ textarea:focus {
         grid-column: 1 / -1;
         justify-items: start;
         text-align: left;
+    }
+}
+
+/* Final Android parity overrides kept last so older PC styles cannot crop media or revive invoice UI. */
+@media screen {
+    :root {
+        --bg: #f5f5f5;
+        --surface: #ffffff;
+        --surface-soft: #f7f7f7;
+        --text: #101114;
+        --muted: #666a70;
+        --line: #d9d9d9;
+        --primary: #c72c41;
+        --primary-dark: #a50034;
+        --primary-soft: #fae8ec;
+        --success: #15803d;
+        --success-soft: #eaf7ef;
+        --warning: #a16207;
+        --warning-soft: #fff7df;
+        --danger: #be123c;
+        --danger-soft: #fff1f2;
+    }
+
+    .nav-links a[href*="invoice"],
+    .dashboard-command-actions a[href*="invoice"],
+    .dashboard-action-list a[href*="invoice"] {
+        display: none !important;
+    }
+
+    .nav-links {
+        padding: 7px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #ffffff;
+    }
+
+    .nav-links > a:not(.button) {
+        border-radius: 999px;
+    }
+
+    .nav-links > a.active,
+    .nav-links > a:hover {
+        background: var(--primary-soft);
+        color: var(--primary-dark);
+    }
+
+    .dashboard-command-copy,
+    .dashboard-today-card,
+    .dashboard-kpi-card,
+    .dashboard-panel,
+    .motor-command,
+    .motor-filter-panel,
+    .motor-summary-card,
+    .motor-card,
+    .workers-command,
+    .workers-month-panel,
+    .ops-panel,
+    .worker-metric,
+    .settings-card,
+    .entry-form {
+        border-color: var(--line);
+        background: var(--surface);
+        box-shadow: 0 12px 30px -26px rgba(16, 17, 20, 0.34);
+    }
+
+    .dashboard-kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    body[data-page="motors"] .motor-card {
+        grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+        border-radius: 8px;
+    }
+
+    body[data-page="motors"] .motor-image.motor-media,
+    body[data-page="motors"] .primary-media,
+    .existing-media-preview,
+    .media-preview-card,
+    .media-thumb {
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    body[data-page="motors"] .motor-image.motor-media {
+        min-height: 330px;
+        padding: 12px;
+    }
+
+    body[data-page="motors"] .primary-media {
+        min-height: 260px;
+    }
+
+    .motor-image img,
+    .motor-image video,
+    .primary-media img,
+    .primary-media video,
+    .media-thumb img,
+    .existing-media-preview img,
+    .existing-media-preview video,
+    .media-preview-card img,
+    .media-preview-card video,
+    .dashboard-thumb img,
+    .dashboard-thumb video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+        background: #ffffff;
+    }
+
+    .dashboard-thumb {
+        width: 70px;
+        height: 70px;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    .payment-switch {
+        border-color: var(--line);
+        background: #ffffff;
+    }
+
+    .payment-switch-button.unpaid.active,
+    .payment-badge.unpaid {
+        background: var(--danger-soft);
+        color: var(--danger);
+    }
+
+    .payment-switch-button.paid.active,
+    .payment-badge.paid {
+        background: var(--success-soft);
+        color: var(--success);
+    }
+
+    .payment-badge.partial {
+        background: var(--warning-soft);
+        color: var(--warning);
+    }
+
+    .media-lightbox-panel {
+        width: min(1500px, calc(100vw - 36px));
+        height: min(920px, calc(100dvh - 36px));
+        border-radius: 18px;
+        background: #ffffff;
+    }
+
+    .media-lightbox-stage {
+        overflow: hidden;
+        border-radius: 12px;
+        background: #111111;
+    }
+
+    .media-lightbox-stage img,
+    .media-lightbox-stage video {
+        width: auto !important;
+        height: auto !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: contain !important;
+        background: #111111;
+    }
+
+    .settings-layout {
+        grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+    }
+
+    body[data-page="workers"] .worker-row {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        background: #ffffff;
+    }
+
+    body[data-page="workers"] .worker-list {
+        gap: 12px;
+    }
+
+    .worker-payment-cell {
+        min-width: 280px;
+    }
+
+    .worker-payment-form {
+        display: grid;
+        grid-template-columns: 140px 120px minmax(120px, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .worker-payment-form input {
+        min-height: 38px;
+        padding: 8px 10px;
+    }
+
+    .worker-payment-history {
+        display: grid;
+        gap: 2px;
+        margin-top: 7px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+}
+
+@media screen and (max-width: 1180px) {
+    .dashboard-kpi-grid,
+    body[data-page="workers"] .worker-metric-grid,
+    body[data-page="motors"] .motor-card,
+    .settings-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media screen and (max-width: 760px) {
+    .worker-payment-form {
+        grid-template-columns: 1fr;
+    }
+
+    .media-lightbox {
+        padding: 8px;
+    }
+
+    .media-lightbox-panel {
+        width: calc(100vw - 16px);
+        height: calc(100dvh - 16px);
+        border-radius: 14px;
     }
 }

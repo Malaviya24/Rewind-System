@@ -62,6 +62,7 @@ WORK_DONE_STATUSES = ("Completed", "Delivered")
 PAYMENT_STATUSES = ("Unpaid", "Partial", "Paid")
 ATTENDANCE_STATUSES = ("Present", "Leave", "Absent")
 PHONE_RE = re.compile(r"^[0-9+\-\s()]{7,20}$")
+INVOICE_ENDPOINTS = {"invoices", "new_invoice", "edit_invoice", "view_invoice", "delete_invoice"}
 APP_ID = "rewindin-shop"
 LICENSE_PLATFORM = "pc"
 LICENSE_PREFIX = "RWND"
@@ -702,6 +703,8 @@ def require_valid_license():
         return None
     if request.endpoint is None:
         return None
+    if request.endpoint in INVOICE_ENDPOINTS:
+        abort(404)
     status = get_license_status()
     g.license_status = status
     if not status["valid"]:
@@ -808,11 +811,22 @@ def parse_optional_date(value, label, errors):
 
 def validate_phone(value, errors):
     value = (value or "").strip()
-    digits = re.sub(r"\D", "", value)
     if not value:
         errors.append("Phone number is required.")
-    elif not PHONE_RE.match(value) or not (len(digits) == 10 or (len(digits) == 12 and digits.startswith("91"))):
-        errors.append("Phone number must be a valid 10-digit mobile number.")
+        return ""
+    if not re.fullmatch(r"\d{10}", value):
+        errors.append("Phone number must contain exactly 10 digits.")
+        return value
+    return value
+
+
+def validate_optional_phone(value, label, errors):
+    value = (value or "").strip()
+    if not value:
+        return ""
+    if not re.fullmatch(r"\d{10}", value):
+        errors.append(f"{label} must contain exactly 10 digits.")
+        return value
     return value
 
 
@@ -823,15 +837,9 @@ def phone_digits(value):
 def phone_digits_match(submitted, registered):
     submitted_digits = phone_digits(submitted)
     registered_digits = phone_digits(registered)
-    if not submitted_digits or not registered_digits:
+    if len(submitted_digits) != 10 or len(registered_digits) != 10:
         return False
-    if submitted_digits == registered_digits:
-        return True
-    return (
-        len(submitted_digits) >= 10
-        and len(registered_digits) >= 10
-        and submitted_digits[-10:] == registered_digits[-10:]
-    )
+    return submitted_digits == registered_digits
 
 
 def file_extension(filename):
@@ -1351,6 +1359,28 @@ def build_worker_month_context(attendance_month=None):
                 "status": record["status"],
             }
 
+    worker_ids = [row["id"] for row in worker_rows]
+    salary_payment_map = {worker_id: {"total": 0, "records": []} for worker_id in worker_ids}
+    if worker_ids:
+        placeholders = ", ".join("?" for _ in worker_ids)
+        payment_rows = [
+            dict(row)
+            for row in db.execute(
+                f"""
+                SELECT id, worker_id, payment_date, amount, note
+                FROM worker_salary_payments
+                WHERE worker_id IN ({placeholders})
+                    AND payment_date BETWEEN ? AND ?
+                ORDER BY payment_date DESC, id DESC
+                """,
+                (*worker_ids, month_start.isoformat(), month_end.isoformat()),
+            ).fetchall()
+        ]
+        for payment in payment_rows:
+            bucket = salary_payment_map.setdefault(payment["worker_id"], {"total": 0, "records": []})
+            bucket["total"] += float(payment["amount"] or 0)
+            bucket["records"].append(payment)
+
     if month_start <= today_date <= month_end:
         attendance_scope_days = (today_date - month_start).days + 1
     else:
@@ -1374,6 +1404,9 @@ def build_worker_month_context(attendance_month=None):
         row["daily_salary"] = daily_salary
         row["salary_earned"] = present_days * daily_salary
         row["salary_deducted"] = (leave_days + absent_days) * daily_salary
+        row["salary_paid"] = salary_payment_map.get(row["id"], {}).get("total", 0)
+        row["salary_balance"] = max(row["salary_earned"] - row["salary_paid"], 0)
+        row["salary_payments"] = salary_payment_map.get(row["id"], {}).get("records", [])[:3]
         row["today_salary"] = daily_salary if row["today_status"] == "Present" else 0
 
         if not row["active"]:
@@ -1443,6 +1476,8 @@ def build_worker_month_context(attendance_month=None):
         "today_salary_total": sum(float(row["today_salary"] or 0) for row in worker_rows),
         "period_salary_total": sum(float(row["salary_earned"] or 0) for row in worker_rows),
         "period_deduction_total": sum(float(row["salary_deducted"] or 0) for row in worker_rows),
+        "period_paid_total": sum(float(row["salary_paid"] or 0) for row in worker_rows),
+        "period_balance_total": sum(float(row["salary_balance"] or 0) for row in worker_rows),
     }
     return {
         "attendance_month": attendance_month,
@@ -2245,7 +2280,7 @@ def workers():
 def add_worker():
     errors = []
     name = clean_text(request.form.get("name"), "Worker name", errors)
-    phone_number = clean_text(request.form.get("phone_number"), "Worker phone", errors, max_length=30, required=False)
+    phone_number = validate_optional_phone(request.form.get("phone_number"), "Worker phone", errors)
     role = clean_text(request.form.get("role"), "Worker role", errors, max_length=120, required=False)
     attendance_month = (request.form.get("attendance_month") or date.today().strftime("%Y-%m")).strip()
     try:
@@ -2325,6 +2360,40 @@ def mark_worker_attendance(worker_id):
     return report_redirect()
 
 
+@app.route("/workers/<int:worker_id>/salary-payment", methods=("POST",))
+def add_worker_salary_payment(worker_id):
+    worker = get_db().execute("SELECT * FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    if worker is None:
+        abort(404)
+
+    errors = []
+    attendance_month = (request.form.get("attendance_month") or date.today().strftime("%Y-%m")).strip()
+    payment_date = parse_optional_date(request.form.get("payment_date"), "Payment date", errors)
+    if not payment_date:
+        errors.append("Payment date is required.")
+    amount = parse_money(request.form.get("amount"), "Payment amount", errors, required=True)
+    if amount <= 0:
+        errors.append("Payment amount must be greater than zero.")
+    note = clean_text(request.form.get("note"), "Payment note", errors, max_length=255, required=False)
+
+    if errors:
+        for error in errors:
+            flash(error, "error")
+        return redirect(url_for("workers", month=attendance_month, _anchor=f"attendance-worker-{worker_id}"))
+
+    now = datetime.now().isoformat(timespec="seconds")
+    get_db().execute(
+        """
+        INSERT INTO worker_salary_payments (worker_id, payment_date, amount, note, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (worker_id, payment_date, amount, note, now, now),
+    )
+    get_db().commit()
+    flash(f"Salary payment saved for {worker['name']}.", "success")
+    return redirect(url_for("workers", month=attendance_month, _anchor=f"attendance-worker-{worker_id}"))
+
+
 @app.route("/workers/<int:worker_id>/toggle", methods=("POST",))
 def toggle_worker(worker_id):
     worker = get_db().execute("SELECT * FROM workers WHERE id = ?", (worker_id,)).fetchone()
@@ -2348,7 +2417,7 @@ def settings():
         data = {
             "shop_name": clean_text(request.form.get("shop_name"), "Shop name", errors),
             "owner_name": clean_text(request.form.get("owner_name"), "Owner name", errors, required=False),
-            "phone_number": clean_text(request.form.get("phone_number"), "Shop phone", errors, max_length=30, required=False),
+            "phone_number": validate_optional_phone(request.form.get("phone_number"), "Shop phone", errors),
             "address": clean_text(request.form.get("address"), "Address", errors, max_length=800, required=False),
             "receipt_note": clean_text(request.form.get("receipt_note"), "Receipt note", errors, max_length=500, required=False),
         }
@@ -2395,13 +2464,7 @@ def reset_admin_pin():
     settings_row = dict(get_shop_settings())
     registered_mobile = settings_row.get("phone_number", "")
     errors = []
-    submitted_mobile = clean_text(
-        request.form.get("registered_mobile"),
-        "Registered mobile number",
-        errors,
-        max_length=30,
-        required=False,
-    )
+    submitted_mobile = validate_phone(request.form.get("registered_mobile"), errors)
     new_pin = (request.form.get("new_pin") or "").strip()
     confirm_pin = (request.form.get("confirm_pin") or "").strip()
 
