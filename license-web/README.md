@@ -49,6 +49,8 @@ license-web
 5. Add the environment variables above.
 6. Deploy.
 
+Vercel serves the static website from `public/` and the license signing endpoint from `api/generate.js`.
+
 ## How To Generate License
 
 1. Open the deployed Vercel website.

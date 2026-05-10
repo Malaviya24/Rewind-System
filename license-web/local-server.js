@@ -4,6 +4,7 @@ const path = require("path");
 const generateHandler = require("./api/generate");
 
 const root = __dirname;
+const publicRoot = path.join(root, "public");
 const port = Number(process.env.PORT || 4173);
 
 if (!process.env.LICENSE_ADMIN_TOKEN) {
@@ -30,9 +31,9 @@ function serveStatic(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const requestedPath = url.pathname === "/" ? "/index.html" : url.pathname;
   const normalizedPath = path.normalize(requestedPath).replace(/^(\.\.[/\\])+/, "");
-  const filePath = path.join(root, normalizedPath);
+  const filePath = path.join(publicRoot, normalizedPath);
 
-  if (!filePath.startsWith(root)) {
+  if (!filePath.startsWith(publicRoot)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
