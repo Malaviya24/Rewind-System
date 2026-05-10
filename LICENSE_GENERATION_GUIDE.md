@@ -70,6 +70,31 @@ For future PC software:
 node tools\license\generate-license.js --device RWND-PC-DEVICE-CODE --customer "ABC Motor Shop" --platform pc
 ```
 
+## Generate License From Website
+
+A Vercel-ready admin website is available in:
+
+```text
+license-web/
+```
+
+Deploy that folder as the Vercel project root and set these environment variables in Vercel:
+
+```text
+LICENSE_ADMIN_TOKEN=your-long-secret-admin-password
+LICENSE_PRIVATE_KEY_BASE64=<base64 of license-secrets/license-private.pem>
+```
+
+PowerShell command to create `LICENSE_PRIVATE_KEY_BASE64`:
+
+```powershell
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Content license-secrets\license-private.pem -Raw)))
+```
+
+After deployment, open the website, enter the admin token, paste the Android or PC device code, choose the platform, enter shop name, and generate the license key.
+
+Important: the private key must stay only in Vercel environment variables or your local `license-secrets/` folder. Never put the private key in frontend code.
+
 ## Phone Change
 
 If the customer changes phone:

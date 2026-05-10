@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rewind License Generator</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Rewind System</p>
+          <h1>License Generator</h1>
+          <p class="subcopy">Enter the device code from Android or PC software and generate a permanent offline license key.</p>
+        </div>
+        <span class="status-pill">Admin Only</span>
+      </section>
+
+      <section class="panel">
+        <form id="licenseForm" class="form">
+          <label>
+            <span>Admin token</span>
+            <input id="adminToken" name="adminToken" type="password" autocomplete="current-password" placeholder="Vercel LICENSE_ADMIN_TOKEN" required />
+          </label>
+
+          <label>
+            <span>Platform</span>
+            <select id="platform" name="platform">
+              <option value="android">Android app</option>
+              <option value="pc">PC software</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Device code</span>
+            <input id="deviceId" name="deviceId" type="text" autocomplete="off" placeholder="RWND-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" required />
+          </label>
+
+          <label>
+            <span>Shop / customer name</span>
+            <input id="customerName" name="customerName" type="text" autocomplete="organization" placeholder="Malaviya Repair Shop" required />
+          </label>
+
+          <label>
+            <span>App ID</span>
+            <input id="appId" name="appId" type="text" value="rewindin-shop" required />
+          </label>
+
+          <button id="generateButton" type="submit">Generate License</button>
+        </form>
+      </section>
+
+      <section id="resultPanel" class="panel result-panel hidden" aria-live="polite">
+        <div class="result-head">
+          <div>
+            <p class="eyebrow">Generated Key</p>
+            <h2>Copy this into the app</h2>
+          </div>
+          <button id="copyButton" class="secondary" type="button">Copy</button>
+        </div>
+        <textarea id="licenseKey" readonly rows="8"></textarea>
+        <dl id="payloadPreview" class="payload"></dl>
+      </section>
+
+      <p id="message" class="message" role="status"></p>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

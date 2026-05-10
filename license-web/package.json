@@ -1,0 +1,12 @@
+{
+  "name": "rewind-system-license-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline license generator admin website for Rewind System.",
+  "scripts": {
+    "check": "node --check api/generate.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
