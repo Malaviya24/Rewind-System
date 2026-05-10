@@ -4,6 +4,7 @@
   "private": true,
   "description": "Offline license generator admin website for Rewind System.",
   "scripts": {
+    "dev": "node local-server.js",
     "check": "node --check api/generate.js"
   },
   "engines": {
