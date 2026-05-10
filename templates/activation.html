@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Activate PC Software - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="activation-layout">
+    <div class="activation-copy">
+        <p class="eyebrow">Offline activation</p>
+        <h1>Activate PC Software</h1>
+        <p>This computer needs a permanent offline license before shop data can be opened.</p>
+    </div>
+
+    <div class="activation-grid">
+        <article class="activation-card device-card">
+            <div class="section-heading stacked-heading">
+                <h2>Device Code</h2>
+                <span>Send this code to developer</span>
+            </div>
+            <div class="device-code-box">
+                <span>PC DEVICE CODE</span>
+                <strong data-copy-text>{{ device_code }}</strong>
+            </div>
+            <button class="button ghost" type="button" data-copy-source="[data-copy-text]">Copy Device Code</button>
+            <p class="field-hint">This code is generated offline and stays stable on this PC while app data remains.</p>
+        </article>
+
+        <form class="activation-card license-card" method="post" autocomplete="off">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <div class="section-heading stacked-heading">
+                <h2>Enter License Key</h2>
+                <span>Paste the full RWND key</span>
+            </div>
+            <label>
+                <span>License Key</span>
+                <textarea name="license_key" rows="8" placeholder="RWND.payload.signature" required>{{ license_key }}</textarea>
+            </label>
+            {% if status and status.reason %}
+                <p class="license-error">{{ status.reason }}</p>
+            {% endif %}
+            <button class="button primary" type="submit">Activate</button>
+        </form>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Backup - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="page-title">
+    <div>
+        <p class="eyebrow">Data safety</p>
+        <h1>Backup & Restore</h1>
+        <p class="page-subtitle">Download or restore local database and image backups.</p>
+    </div>
+    <a class="button ghost" href="{{ url_for('settings') }}">Settings</a>
+</section>
+
+<section class="content-grid">
+    <form class="panel action-panel" method="post" action="{{ url_for('download_backup') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <h2>Create Backup</h2>
+        <p>Save repair data, workers, attendance, payments, shop details, and related media. License data is never exported.</p>
+        <div class="form-grid compact-form-grid">
+            <label>
+                <span>Start Date</span>
+                <input type="date" name="start_date" data-range-start>
+            </label>
+            <label>
+                <span>End Date</span>
+                <input type="date" name="end_date" data-range-end>
+            </label>
+        </div>
+        <small class="field-hint">Leave dates empty to export all data. With a range, motors and worker records are filtered by date.</small>
+        <button class="button primary" type="submit">Download Backup</button>
+    </form>
+
+    <form class="panel action-panel" method="post" action="{{ url_for('restore_backup') }}" enctype="multipart/form-data" data-confirm="Restore this backup? Current data will be backed up first.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <h2>Restore Backup</h2>
+        <label>
+            <span>Backup ZIP</span>
+            <input type="file" name="backup_file" accept=".zip" required>
+        </label>
+        <button class="button danger" type="submit">Restore</button>
+    </form>
+</section>
+
+<section class="panel recent-backups">
+    <div class="panel-header">
+        <h2>Recent Local Backups</h2>
+    </div>
+    {% if backups %}
+        <div class="compact-list">
+            {% for backup in backups %}
+                <div class="compact-item">
+                    <span>
+                        <strong>{{ backup.name }}</strong>
+                        <small>{{ backup.stat().st_size }} bytes</small>
+                    </span>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">No local backups created yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

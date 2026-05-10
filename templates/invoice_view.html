@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Invoice {{ invoice.invoice_number }} - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="page-title no-print">
+    <div>
+        <p class="eyebrow">{{ invoice.invoice_number }}</p>
+        <h1>Invoice</h1>
+        <p class="page-subtitle">Print this invoice or save as PDF.</p>
+    </div>
+    <div class="title-actions">
+        <button class="button primary" type="button" data-print>Print</button>
+        <a class="button" href="{{ url_for('edit_invoice', invoice_id=invoice.id) }}">Edit</a>
+        <a class="button ghost" href="{{ url_for('invoices') }}">Back</a>
+    </div>
+</section>
+
+<article class="invoice-paper invoice-print-paper">
+    <div class="invoice-head">
+        <div class="invoice-left">
+            <div class="invoice-logo-box readonly">
+                {% if settings.logo_filename %}
+                    <img src="{{ url_for('uploaded_file', filename=settings.logo_filename) }}" alt="{{ settings.shop_name }} logo">
+                {% else %}
+                    <span>{{ settings.shop_name }}</span>
+                {% endif %}
+            </div>
+            <p class="invoice-address">{{ invoice.from_details|replace('\n', '<br>')|safe }}</p>
+        </div>
+        <div class="invoice-right">
+            <h2>INVOICE</h2>
+            <div class="invoice-number-print"><span>#</span><strong>{{ invoice.invoice_number }}</strong></div>
+        </div>
+    </div>
+
+    <div class="invoice-meta-grid invoice-meta-print">
+        <div>
+            <h3>Bill To</h3>
+            <p>{{ invoice.bill_to|replace('\n', '<br>')|safe }}</p>
+        </div>
+        <div>
+            <h3>Ship To</h3>
+            <p>{{ invoice.ship_to|replace('\n', '<br>')|safe if invoice.ship_to else '-' }}</p>
+        </div>
+        <dl class="invoice-print-dates">
+            <div><dt>Date</dt><dd>{{ invoice.invoice_date|display_date }}</dd></div>
+            <div><dt>Payment Terms</dt><dd>{{ invoice.payment_terms or '-' }}</dd></div>
+            <div><dt>Due Date</dt><dd>{{ invoice.due_date|display_date if invoice.due_date else '-' }}</dd></div>
+            <div><dt>PO Number</dt><dd>{{ invoice.po_number or '-' }}</dd></div>
+        </dl>
+    </div>
+
+    <div class="invoice-item-header print-header">
+        <span>Item</span>
+        <span>Quantity</span>
+        <span>Rate</span>
+        <span>Amount</span>
+    </div>
+    {% for item in items %}
+        <div class="invoice-item-row print-row">
+            <span>{{ item.description }}</span>
+            <span>{{ item.quantity }}</span>
+            <span>{{ item.rate|money }}</span>
+            <strong>{{ item.amount|money }}</strong>
+        </div>
+    {% endfor %}
+
+    <div class="invoice-bottom">
+        <div class="invoice-notes print-notes">
+            <h3>Notes</h3>
+            <p>{{ invoice.notes or '-' }}</p>
+            <h3>Terms</h3>
+            <p>{{ invoice.terms or '-' }}</p>
+        </div>
+        <div class="invoice-totals print-totals">
+            <div><span>Subtotal</span><strong>{{ invoice.subtotal|money }}</strong></div>
+            <div><span>Tax</span><strong>{{ invoice.tax_amount|money }}</strong></div>
+            <div><span>Discount</span><strong>{{ invoice.discount_amount|money }}</strong></div>
+            <div><span>Shipping</span><strong>{{ invoice.shipping_amount|money }}</strong></div>
+            <div class="invoice-total-row"><span>Total</span><strong>{{ invoice.total|money }}</strong></div>
+            <div><span>Amount Paid</span><strong>{{ invoice.amount_paid|money }}</strong></div>
+            <div class="invoice-balance-row"><span>Balance Due</span><strong>{{ invoice.balance_due|money }}</strong></div>
+        </div>
+    </div>
+</article>
+{% endblock %}

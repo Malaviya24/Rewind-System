@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+.android-build-tools/
+.gradle-user-home/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/debug.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision

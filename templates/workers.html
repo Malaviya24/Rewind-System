@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}Workers - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="workers-command">
+    <div class="workers-command-copy">
+        <p class="eyebrow">Payroll & attendance</p>
+        <h1>Workers</h1>
+        <p>Manage workforce availability, month-wise attendance, and salary impact from one operational screen.</p>
+    </div>
+    <div class="workers-command-actions">
+        <a class="button primary" href="#add-worker">Add Worker</a>
+        <a class="button" href="#worker-directory">View Workers</a>
+        <a class="button ghost" href="#attendance">Monthly Attendance</a>
+    </div>
+</section>
+
+<section class="workers-month-panel">
+    <div>
+        <p class="eyebrow">Selected month</p>
+        <h2>{{ attendance_month_label }}</h2>
+        <p>{{ worker_summary.marked_days_total or 0 }} attendance marks across {{ worker_summary.active_workers or 0 }} active workers.</p>
+    </div>
+    <form class="month-switcher workers-month-switcher" method="get" action="{{ url_for('workers') }}">
+        <a class="button ghost" href="{{ url_for('workers') }}?month={{ prev_month }}">Previous</a>
+        <label>
+            <span>Month</span>
+            <input type="month" name="month" value="{{ attendance_month }}">
+        </label>
+        <button class="button" type="submit">View</button>
+        <a class="button ghost" href="{{ url_for('workers') }}?month={{ next_month }}">Next</a>
+    </form>
+</section>
+
+<section class="worker-metric-grid" aria-label="Worker attendance summary">
+    <article class="worker-metric">
+        <span>Active workers</span>
+        <strong>{{ worker_summary.active_workers or 0 }}</strong>
+        <small>{{ worker_summary.total_workers or 0 }} total records</small>
+    </article>
+    <article class="worker-metric success">
+        <span>Present today</span>
+        <strong>{{ worker_summary.present_today or 0 }}</strong>
+        <small>{{ worker_summary.today_salary_total|money }} daily payroll</small>
+    </article>
+    <article class="worker-metric warning">
+        <span>Busy workers</span>
+        <strong>{{ worker_summary.busy_workers or 0 }}</strong>
+        <small>High attendance workload</small>
+    </article>
+    <article class="worker-metric danger">
+        <span>Absent today</span>
+        <strong>{{ worker_summary.absent_today or 0 }}</strong>
+        <small>{{ worker_summary.leave_today or 0 }} on leave</small>
+    </article>
+    <article class="worker-metric money">
+        <span>Salary this month</span>
+        <strong>{{ worker_summary.period_salary_total|money }}</strong>
+        <small>{{ worker_summary.period_deduction_total|money }} deducted</small>
+    </article>
+</section>
+
+<section class="workers-layout">
+    <section id="worker-directory" class="ops-panel worker-directory" data-worker-directory>
+        <div class="ops-section-header">
+            <div>
+                <p class="eyebrow">Workforce</p>
+                <h2>Worker Directory</h2>
+            </div>
+            <span class="section-count">{{ worker_summary.total_workers or 0 }} workers</span>
+        </div>
+
+        <div class="worker-toolbar" aria-label="Worker controls">
+            <label class="worker-search-field">
+                <span>Search</span>
+                <input type="search" placeholder="Name, role, phone" data-worker-search>
+            </label>
+            <label>
+                <span>Status</span>
+                <select data-worker-status>
+                    <option value="all">All statuses</option>
+                    <option value="available">Available</option>
+                    <option value="busy">Busy</option>
+                    <option value="offline">Offline</option>
+                    <option value="on-leave">On Leave</option>
+                </select>
+            </label>
+            <label>
+                <span>Sort</span>
+                <select data-worker-sort>
+                    <option value="name">Name</option>
+                    <option value="present">Present days</option>
+                    <option value="earned">Salary earned</option>
+                    <option value="status">Status</option>
+                </select>
+            </label>
+        </div>
+
+        {% if worker_rows %}
+            <div class="worker-list" data-worker-list>
+                {% for worker in worker_rows %}
+                    <article
+                        id="worker-{{ worker.id }}"
+                        class="worker-row {{ 'is-inactive' if not worker.active else '' }} {{ 'is-overloaded' if worker.row_alert == 'High workload' else '' }}"
+                        data-worker-row
+                        data-worker-name="{{ (worker.name ~ ' ' ~ (worker.role or '') ~ ' ' ~ (worker.phone_number or ''))|lower }}"
+                        data-worker-status="{{ worker.availability_slug }}"
+                        data-worker-present="{{ worker.present_days or 0 }}"
+                        data-worker-earned="{{ worker.salary_earned or 0 }}"
+                        data-worker-target="#attendance-worker-{{ worker.id }}"
+                        tabindex="0"
+                        role="link"
+                        aria-label="Open attendance for {{ worker.name }}"
+                    >
+                        <div class="worker-identity">
+                            <span class="worker-avatar">{{ worker.name[:1] }}</span>
+                            <div>
+                                <h3>{{ worker.name }}</h3>
+                                <p>{{ worker.role or 'Worker' }}{% if worker.phone_number %} - {{ worker.phone_number }}{% endif %}</p>
+                            </div>
+                        </div>
+
+                        <div class="worker-state">
+                            <span class="worker-status-badge {{ worker.availability_slug }}">{{ worker.availability }}</span>
+                            {% if worker.row_alert %}
+                                <span class="worker-alert {{ worker.row_alert_slug }}">{{ worker.row_alert }}</span>
+                            {% endif %}
+                        </div>
+
+                        <dl class="worker-row-metrics">
+                            <div>
+                                <dt>Workload</dt>
+                                <dd>{{ worker.workload_label }}</dd>
+                            </div>
+                            <div>
+                                <dt>Marked days</dt>
+                                <dd>{{ worker.marked_days }}/{{ worker.attendance_scope_days }}</dd>
+                            </div>
+                            <div>
+                                <dt>Present</dt>
+                                <dd>{{ worker.present_days or 0 }}</dd>
+                            </div>
+                            <div>
+                                <dt>Earned</dt>
+                                <dd>{{ worker.salary_earned|money }}</dd>
+                            </div>
+                        </dl>
+
+                        <div class="worker-progress-wrap">
+                            <div class="worker-progress-copy">
+                                <span>Attendance progress</span>
+                                <strong>{{ worker.attendance_progress }}%</strong>
+                            </div>
+                            <div class="worker-progress" aria-label="Attendance progress {{ worker.attendance_progress }}%">
+                                <span style="--progress: {{ worker.attendance_progress }}%;"></span>
+                            </div>
+                            <small>{{ worker.last_activity_label }}</small>
+                        </div>
+
+                        {% if worker.phone_number %}
+                        <div class="worker-actions" aria-label="Quick worker actions">
+                            <a class="worker-action" href="tel:{{ worker.phone_number }}">Call</a>
+                        </div>
+                        {% endif %}
+                    </article>
+                {% endfor %}
+            </div>
+            <p class="worker-filter-empty" data-worker-empty hidden>No workers match the selected filters.</p>
+        {% else %}
+            <div class="workers-empty">
+                <strong>No workers added yet</strong>
+                <p>Add your first worker to begin attendance and salary tracking.</p>
+                <a class="button primary small" href="#add-worker">Add Worker</a>
+            </div>
+        {% endif %}
+    </section>
+
+    <aside class="worker-side-rail" aria-label="Worker setup">
+        <form id="add-worker" class="ops-panel worker-add-form" method="post" action="{{ url_for('add_worker') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="attendance_month" value="{{ attendance_month }}">
+            <div class="ops-section-header">
+                <div>
+                    <p class="eyebrow">Setup</p>
+                    <h2>Add Worker</h2>
+                </div>
+            </div>
+            <div class="form-grid compact-form-grid">
+                <label>
+                    <span>Name</span>
+                    <input type="text" name="name" maxlength="255" required>
+                </label>
+                <label>
+                    <span>Monthly Salary</span>
+                    <input type="number" name="monthly_salary" min="0" max="10000000" step="0.01" required>
+                </label>
+                <label>
+                    <span>Phone</span>
+                    <input type="tel" name="phone_number" maxlength="30">
+                </label>
+                <label>
+                    <span>Role</span>
+                    <input type="text" name="role" maxlength="120" placeholder="Mechanic, helper">
+                </label>
+            </div>
+            <button class="button primary" type="submit">Add Worker</button>
+        </form>
+
+        <section id="salary" class="ops-panel salary-rule-panel">
+            <div class="ops-section-header">
+                <div>
+                    <p class="eyebrow">Payroll</p>
+                    <h2>Salary Rule</h2>
+                </div>
+            </div>
+            <p>Monthly salary is divided by the selected calendar month days. Present adds one calculated day salary. Leave or Absent deducts one calculated day salary.</p>
+            <dl class="salary-rule-grid">
+                <div>
+                    <dt>Month salary</dt>
+                    <dd>{{ worker_summary.period_salary_total|money }}</dd>
+                </div>
+                <div>
+                    <dt>Month deduction</dt>
+                    <dd>{{ worker_summary.period_deduction_total|money }}</dd>
+                </div>
+                <div>
+                    <dt>Tracked days</dt>
+                    <dd>{{ worker_summary.attendance_scope_days }}</dd>
+                </div>
+                <div>
+                    <dt>Calendar days</dt>
+                    <dd>{{ month_days|length }}</dd>
+                </div>
+            </dl>
+        </section>
+    </aside>
+</section>
+
+<section id="attendance" class="ops-panel worker-attendance-panel lms-attendance-panel">
+    <div class="ops-section-header">
+        <div>
+            <p class="eyebrow">Attendance</p>
+            <h2>Monthly Attendance</h2>
+        </div>
+        <span class="section-count">{{ attendance_month_label }}</span>
+    </div>
+    {% if worker_rows %}
+        <div class="attendance-legend">
+            <span class="legend-item present">Present</span>
+            <span class="legend-item absent">Absent</span>
+            <span class="legend-item leave">Leave</span>
+            <span class="legend-item unmarked">Unmarked</span>
+            <span class="legend-item today">Today</span>
+        </div>
+        <div class="table-wrap attendance-table-wrap">
+            <table class="attendance-calendar-table">
+                <thead>
+                    <tr>
+                        <th class="worker-sticky">Worker</th>
+                        {% for day in month_days %}
+                            <th class="{{ 'is-today' if day.isoformat() == today else '' }}">
+                                <span>{{ day.day }}</span>
+                                <small>{{ day.strftime('%a') }}</small>
+                            </th>
+                        {% endfor %}
+                        <th>Present</th>
+                        <th>Leave</th>
+                        <th>Absent</th>
+                        <th>Earned</th>
+                        <th>Deducted</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for worker in worker_rows %}
+                        <tr id="attendance-worker-{{ worker.id }}" class="{{ 'inactive-row' if not worker.active else '' }}">
+                            <td class="worker-sticky worker-calendar-name">
+                                <strong>{{ worker.name }}</strong>
+                                <small>{{ worker.role or 'Worker' }}{% if worker.phone_number %} - {{ worker.phone_number }}{% endif %}</small>
+                                <small>{{ worker.monthly_salary|money }} / month</small>
+                                <small>{{ worker.daily_salary|money }} / calculated day</small>
+                            </td>
+                            {% for day in worker.days %}
+                                {% set status = day.record.status or 'Unmarked' %}
+                                <td class="attendance-day-cell {{ 'is-today' if day.is_today else '' }}">
+                                    <form method="post" action="{{ url_for('mark_worker_attendance', worker_id=worker.id) }}">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="attendance_month" value="{{ attendance_month }}">
+                                        <input type="hidden" name="work_date" value="{{ day.date }}">
+                                        <input type="hidden" name="note" value="{{ day.record.note }}">
+                                        <select class="attendance-cell-select {{ status|status_slug }}" name="status" title="{{ worker.name }} - {{ day.date }}" data-auto-submit>
+                                            <option value="Unmarked" {{ 'selected' if status == 'Unmarked' else '' }}>-</option>
+                                            <option value="Present" {{ 'selected' if status == 'Present' else '' }}>P</option>
+                                            <option value="Absent" {{ 'selected' if status == 'Absent' else '' }}>A</option>
+                                            <option value="Leave" {{ 'selected' if status == 'Leave' else '' }}>L</option>
+                                        </select>
+                                    </form>
+                                </td>
+                            {% endfor %}
+                            <td class="summary-count present">{{ worker.present_days or 0 }}</td>
+                            <td class="summary-count leave">{{ worker.leave_days or 0 }}</td>
+                            <td class="summary-count absent">{{ worker.absent_days or 0 }}</td>
+                            <td class="summary-money">{{ worker.salary_earned|money }}</td>
+                            <td class="summary-money danger-text">{{ worker.salary_deducted|money }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty-state">No workers added yet. Add workers above to start attendance and salary tracking.</p>
+    {% endif %}
+</section>
+{% endblock %}

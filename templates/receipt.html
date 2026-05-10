@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Receipt {{ motor.job_number }} - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="page-title no-print">
+    <div>
+        <p class="eyebrow">{{ motor.job_number }}</p>
+        <h1>Job Receipt</h1>
+        <p class="page-subtitle">Print this job card or save as PDF.</p>
+    </div>
+    <div class="title-actions">
+        <button class="button primary" type="button" data-print>Print</button>
+        <a class="button ghost" href="{{ url_for('motors') }}">Back</a>
+    </div>
+</section>
+
+<article class="receipt-sheet">
+    <header class="receipt-header">
+        <div>
+            {% if settings.logo_filename %}
+                <img class="receipt-logo" src="{{ url_for('uploaded_file', filename=settings.logo_filename) }}" alt="{{ settings.shop_name }} logo">
+            {% endif %}
+        </div>
+        <div>
+            <h2>{{ settings.shop_name }}</h2>
+            {% if settings.owner_name %}<p>{{ settings.owner_name }}</p>{% endif %}
+            {% if settings.phone_number %}<p>{{ settings.phone_number }}</p>{% endif %}
+            {% if settings.address %}<p>{{ settings.address }}</p>{% endif %}
+        </div>
+    </header>
+
+    <div class="receipt-title">
+        <h3>Repair Job Card</h3>
+        <strong>{{ motor.job_number }}</strong>
+    </div>
+
+    <dl class="receipt-grid">
+        <div>
+            <dt>Customer</dt>
+            <dd>{{ motor.customer_name }}</dd>
+        </div>
+        <div>
+            <dt>Phone</dt>
+            <dd>{{ motor.phone_number }}</dd>
+        </div>
+        <div>
+            <dt>Motor Type</dt>
+            <dd>{{ motor.motor_type }}</dd>
+        </div>
+        <div>
+            <dt>Status</dt>
+            <dd>{{ motor.status }}</dd>
+        </div>
+        <div>
+            <dt>Date Added</dt>
+            <dd>{{ motor.date_added|display_date }}</dd>
+        </div>
+        <div>
+            <dt>Deadline</dt>
+            <dd>{{ motor.deadline_date|display_date }}</dd>
+        </div>
+        <div>
+            <dt>Estimated Cost</dt>
+            <dd>{{ motor.estimated_cost|money }}</dd>
+        </div>
+        <div>
+            <dt>Final Amount</dt>
+            <dd>{{ repair_amount(motor)|money }}</dd>
+        </div>
+        <div>
+            <dt>Paid</dt>
+            <dd>{{ motor.advance_paid|money }}</dd>
+        </div>
+        <div>
+            <dt>Balance</dt>
+            <dd>{{ balance_amount(motor)|money }}</dd>
+        </div>
+    </dl>
+
+    <section class="receipt-problem">
+        <h3>Problem Description</h3>
+        <p>{{ motor.problem_description }}</p>
+    </section>
+
+    {% if settings.receipt_note %}
+        <p class="receipt-note">{{ settings.receipt_note }}</p>
+    {% endif %}
+
+    <footer class="receipt-footer">
+        <span>Customer Signature</span>
+        <span>Shop Signature</span>
+    </footer>
+</article>
+{% endblock %}

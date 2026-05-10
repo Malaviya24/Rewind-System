@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="dashboard-command">
+    <div class="dashboard-command-copy">
+        <p class="eyebrow">{{ period_filter.label }}</p>
+        <h1>Shop <span>Dashboard</span></h1>
+        <p>Monitor repair load, overdue work, pending payments, customers, workers, and daily cash flow from one control screen.</p>
+        <div class="dashboard-command-actions">
+            <a class="button primary" href="{{ url_for('add_motor') }}">Add Motor</a>
+            <a class="button" href="{{ url_for('new_invoice') }}">New Invoice</a>
+            <a class="button ghost" href="{{ url_for('motors', filter='overdue') }}">Overdue Jobs</a>
+        </div>
+    </div>
+
+    <aside class="dashboard-today-card" aria-label="Today summary">
+        <div>
+            <span class="dashboard-card-label">Today's intake</span>
+            <strong>{{ stats.motors_today or 0 }}</strong>
+            <small>new motor{{ '' if stats.motors_today == 1 else 's' }}</small>
+        </div>
+        <dl>
+            <div>
+                <dt>Open repairs</dt>
+                <dd>{{ stats.pending_count or 0 }}</dd>
+            </div>
+            <div>
+                <dt>Overdue</dt>
+                <dd>{{ stats.overdue_count or 0 }}</dd>
+            </div>
+        </dl>
+    </aside>
+</section>
+
+<section class="dashboard-filter-panel">
+    <div class="motor-filter-tabs">
+        <a class="{{ 'active' if period_filter.period == 'all' else '' }}" href="{{ url_for('dashboard', period='all') }}">All</a>
+        <a class="{{ 'active' if period_filter.period == 'today' else '' }}" href="{{ url_for('dashboard', period='today') }}">Today</a>
+        <a class="{{ 'active' if period_filter.period == 'day' else '' }}" href="{{ url_for('dashboard', period='day', date=period_filter.date) }}">Date</a>
+        <a class="{{ 'active' if period_filter.period == 'month' else '' }}" href="{{ url_for('dashboard', period='month', month=period_filter.month) }}">Month</a>
+        <a class="{{ 'active' if period_filter.period == 'range' else '' }}" href="{{ url_for('dashboard', period='range', start_date=period_filter.start_date, end_date=period_filter.end_date) }}">Range</a>
+        <span class="motor-filter-context">{{ period_filter.label }}</span>
+    </div>
+    <form class="filter-bar motor-filter-form" method="get" action="{{ url_for('dashboard') }}" data-period-filter>
+        <label>
+            <span>Date Filter</span>
+            <select name="period" data-period-select>
+                <option value="all" {{ 'selected' if period_filter.period == 'all' else '' }}>All dates</option>
+                <option value="today" {{ 'selected' if period_filter.period == 'today' else '' }}>Today</option>
+                <option value="day" {{ 'selected' if period_filter.period == 'day' else '' }}>Single date</option>
+                <option value="month" {{ 'selected' if period_filter.period == 'month' else '' }}>Month</option>
+                <option value="range" {{ 'selected' if period_filter.period == 'range' else '' }}>Start to end range</option>
+            </select>
+        </label>
+        <label class="motor-period-input" data-period-input="day">
+            <span>Date</span>
+            <input type="date" name="date" value="{{ period_filter.date }}">
+        </label>
+        <label class="motor-period-input" data-period-input="month">
+            <span>Month</span>
+            <input type="month" name="month" value="{{ period_filter.month }}">
+        </label>
+        <label class="motor-period-input" data-period-input="range">
+            <span>Start Date</span>
+            <input type="date" name="start_date" value="{{ period_filter.start_date }}" data-range-start>
+        </label>
+        <label class="motor-period-input" data-period-input="range">
+            <span>End Date</span>
+            <input type="date" name="end_date" value="{{ period_filter.end_date }}" data-range-end>
+        </label>
+        <button class="button" type="submit">Apply</button>
+        <a class="button ghost" href="{{ url_for('dashboard') }}">Clear</a>
+    </form>
+</section>
+
+<section class="dashboard-kpi-grid" aria-label="Shop summary">
+    <a class="dashboard-kpi-card" href="{{ url_for('motors') }}">
+        <span>Total motors</span>
+        <strong>{{ stats.total_motors or 0 }}</strong>
+        <small>{{ period_filter.label }}</small>
+    </a>
+    <a class="dashboard-kpi-card warning" href="{{ url_for('motors', filter='pending') }}">
+        <span>Open repairs</span>
+        <strong>{{ stats.pending_count or 0 }}</strong>
+        <small>Need attention</small>
+    </a>
+    <a class="dashboard-kpi-card danger" href="{{ url_for('motors', filter='overdue') }}">
+        <span>Overdue repairs</span>
+        <strong>{{ stats.overdue_count or 0 }}</strong>
+        <small>Past deadline</small>
+    </a>
+    <a class="dashboard-kpi-card success" href="{{ url_for('motors', filter='completed') }}">
+        <span>Completed repairs</span>
+        <strong>{{ stats.completed_count or 0 }}</strong>
+        <small>Ready or delivered</small>
+    </a>
+    <article class="dashboard-kpi-card money">
+        <span>Completed value today</span>
+        <strong>{{ stats.earnings_today|money }}</strong>
+        <small>Work completed today</small>
+    </article>
+    <a class="dashboard-kpi-card danger" href="{{ url_for('motors', filter='unpaid') }}">
+        <span>Pending balance</span>
+        <strong>{{ stats.pending_balance|money }}</strong>
+        <small>Receivable amount</small>
+    </a>
+    <article class="dashboard-kpi-card success">
+        <span>Collected total</span>
+        <strong>{{ stats.collected_total|money }}</strong>
+        <small>Advance and received payments</small>
+    </article>
+    <article class="dashboard-kpi-card">
+        <span>Customers</span>
+        <strong>{{ stats.customer_count or 0 }}</strong>
+        <small>Unique phone records</small>
+    </article>
+    <article class="dashboard-kpi-card">
+        <span>Workers</span>
+        <strong>{{ workers_count or 0 }}</strong>
+        <small>Active staff</small>
+    </article>
+</section>
+
+<section class="dashboard-workspace" aria-label="Dashboard workspace">
+    <article class="dashboard-panel dashboard-panel-priority">
+        <div class="dashboard-panel-header">
+            <div>
+                <span>Needs attention</span>
+                <h2>Today’s Watchlist</h2>
+            </div>
+            <a href="{{ url_for('motors', filter='pending') }}">Open motors</a>
+        </div>
+
+        {% if attention_motors %}
+            <div class="dashboard-list dashboard-media-list">
+                {% for motor in attention_motors %}
+                    <a class="dashboard-list-item dashboard-media-item {{ 'is-overdue' if motor.status not in done_statuses and motor.deadline_date < today else '' }}" href="{{ url_for('edit_motor', motor_id=motor.id) }}">
+                        <span class="dashboard-thumb">
+                            {% if motor.primary_media %}
+                                {% if motor.primary_media.media_type == 'video' %}
+                                    <video src="{{ url_for('uploaded_file', filename=motor.primary_media.filename) }}" muted preload="metadata"></video>
+                                {% else %}
+                                    <img src="{{ url_for('uploaded_file', filename=motor.primary_media.filename) }}" alt="{{ motor.motor_type }} image">
+                                {% endif %}
+                            {% else %}
+                                {{ motor.motor_type[:1] }}
+                            {% endif %}
+                        </span>
+                        <div>
+                            <strong>{{ motor.customer_name }}</strong>
+                            <small>{{ motor.job_number }} - {{ motor.motor_type }} - due {{ motor.deadline_date|display_date }}</small>
+                        </div>
+                        <div class="dashboard-list-meta">
+                            <span class="status-badge {{ motor.status|status_slug }}">{{ motor.status }}</span>
+                            <em>{{ motor.payment_status }} · {{ balance_amount(motor)|money }}</em>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="dashboard-empty">
+                <strong>No urgent work</strong>
+                <p>No overdue or pending-payment motors match this filter.</p>
+            </div>
+        {% endif %}
+    </article>
+
+    <article class="dashboard-panel dashboard-panel-priority">
+        <div class="dashboard-panel-header">
+            <div>
+                <span>Priority</span>
+                <h2>Overdue Repairs</h2>
+            </div>
+            <a href="{{ url_for('motors', filter='overdue') }}">View all</a>
+        </div>
+
+        {% if overdue_motors %}
+            <div class="dashboard-list dashboard-media-list">
+                {% for motor in overdue_motors %}
+                    <a class="dashboard-list-item dashboard-media-item is-overdue" href="{{ url_for('edit_motor', motor_id=motor.id) }}">
+                        <span class="dashboard-thumb">
+                            {% if motor.primary_media %}
+                                {% if motor.primary_media.media_type == 'video' %}
+                                    <video src="{{ url_for('uploaded_file', filename=motor.primary_media.filename) }}" muted preload="metadata"></video>
+                                {% else %}
+                                    <img src="{{ url_for('uploaded_file', filename=motor.primary_media.filename) }}" alt="{{ motor.motor_type }} image">
+                                {% endif %}
+                            {% else %}
+                                {{ motor.motor_type[:1] }}
+                            {% endif %}
+                        </span>
+                        <div>
+                            <strong>{{ motor.customer_name }}</strong>
+                            <small>{{ motor.job_number }} - {{ motor.motor_type }}</small>
+                        </div>
+                        <div class="dashboard-list-meta">
+                            <span class="status-badge {{ motor.status|status_slug }}">{{ motor.status }}</span>
+                            <em>Due {{ motor.deadline_date|display_date }}</em>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="dashboard-empty">
+                <strong>No overdue repairs</strong>
+                <p>Every pending job is still inside its deadline.</p>
+            </div>
+        {% endif %}
+    </article>
+
+    <article class="dashboard-panel dashboard-panel-money">
+        <div class="dashboard-panel-header">
+            <div>
+                <span>Receivables</span>
+                <h2>Pending Payment Motors</h2>
+            </div>
+            <a href="{{ url_for('motors', filter='unpaid') }}">View unpaid</a>
+        </div>
+        {% if pending_payment_motors %}
+            <div class="dashboard-list dashboard-media-list">
+                {% for motor in pending_payment_motors %}
+                    <a class="dashboard-list-item dashboard-media-item" href="{{ url_for('edit_motor', motor_id=motor.id) }}">
+                        <span class="dashboard-thumb">
+                            {% if motor.primary_media %}
+                                {% if motor.primary_media.media_type == 'video' %}
+                                    <video src="{{ url_for('uploaded_file', filename=motor.primary_media.filename) }}" muted preload="metadata"></video>
+                                {% else %}
+                                    <img src="{{ url_for('uploaded_file', filename=motor.primary_media.filename) }}" alt="{{ motor.motor_type }} image">
+                                {% endif %}
+                            {% else %}
+                                {{ motor.motor_type[:1] }}
+                            {% endif %}
+                        </span>
+                        <div>
+                            <strong>{{ motor.customer_name }}</strong>
+                            <small>{{ motor.job_number }} - {{ motor.motor_type }} - {{ motor.payment_status }}</small>
+                        </div>
+                        <div class="dashboard-list-meta">
+                            <span class="payment-badge {{ motor.payment_status|status_slug }}">{{ motor.payment_status }}</span>
+                            <em>{{ balance_amount(motor)|money }}</em>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="dashboard-empty">
+                <strong>No pending payment</strong>
+                <p>All motors in this filter are paid or have no balance.</p>
+            </div>
+        {% endif %}
+    </article>
+
+    <article class="dashboard-panel dashboard-panel-money">
+        <div class="dashboard-panel-header">
+            <div>
+                <span>Money</span>
+                <h2>Payment Snapshot</h2>
+            </div>
+            <a href="{{ url_for('motors', filter='unpaid') }}">Unpaid</a>
+        </div>
+        <dl class="dashboard-money-grid">
+            <div>
+                <dt>Today completed</dt>
+                <dd>{{ stats.earnings_today|money }}</dd>
+            </div>
+            <div>
+                <dt>Pending balance</dt>
+                <dd>{{ stats.pending_balance|money }}</dd>
+            </div>
+            <div>
+                <dt>Collected total</dt>
+                <dd>{{ stats.collected_total|money }}</dd>
+            </div>
+            <div>
+                <dt>Total value</dt>
+                <dd>{{ stats.total_earnings|money }}</dd>
+            </div>
+        </dl>
+    </article>
+
+    <article class="dashboard-panel dashboard-panel-recent">
+        <div class="dashboard-panel-header">
+            <div>
+                <span>Recent jobs</span>
+                <h2>Motor Activity</h2>
+            </div>
+            <a href="{{ url_for('motors') }}">View all</a>
+        </div>
+
+        {% if recent_motors %}
+            <div class="dashboard-list">
+                {% for motor in recent_motors %}
+                    <a class="dashboard-list-item" href="{{ url_for('edit_motor', motor_id=motor.id) }}">
+                        <div>
+                            <strong>{{ motor.customer_name }}</strong>
+                            <small>{{ motor.job_number }} - {{ motor.motor_type }} - {{ motor.date_added|display_date }}</small>
+                        </div>
+                        <div class="dashboard-list-meta">
+                            <span class="status-badge {{ motor.status|status_slug }}">{{ motor.status }}</span>
+                            <em>{{ repair_amount(motor)|money }}</em>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="dashboard-empty">
+                <strong>No motor entries yet</strong>
+                <p>Add your first repair job to start tracking shop work.</p>
+                <a class="button primary small" href="{{ url_for('add_motor') }}">Add Motor</a>
+            </div>
+        {% endif %}
+    </article>
+
+    <article class="dashboard-panel dashboard-panel-actions">
+        <div class="dashboard-panel-header">
+            <div>
+                <span>Actions</span>
+                <h2>Quick Workflows</h2>
+            </div>
+        </div>
+
+        <div class="dashboard-action-list">
+            <a href="{{ url_for('add_motor') }}">
+                <strong>Add repair job</strong>
+                <small>Customer, motor details, media, cost, and deadline.</small>
+            </a>
+            <a href="{{ url_for('new_invoice') }}">
+                <strong>Create blank invoice</strong>
+                <small>Build a professional invoice with custom line items.</small>
+            </a>
+            {% for motor in recent_motors[:3] %}
+                <a href="{{ url_for('new_invoice', motor_id=motor.id) }}">
+                    <strong>Invoice {{ motor.job_number }}</strong>
+                    <small>{{ motor.customer_name }} - {{ motor.motor_type }}</small>
+                </a>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+
+<div data-desktop-reminders hidden>
+    {% for motor in attention_motors %}
+        {% if motor.status not in done_statuses and motor.deadline_date <= tomorrow %}
+            <span
+                data-reminder-id="{{ motor.id }}-{{ motor.deadline_date }}"
+                data-reminder-title="{{ 'Motor overdue' if motor.deadline_date < today else ('Motor due today' if motor.deadline_date == today else 'Motor deadline near') }}"
+                data-reminder-body="{{ motor.job_number }} - {{ motor.motor_type }} for {{ motor.customer_name }}"
+            ></span>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endblock %}

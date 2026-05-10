@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% set is_edit = mode == 'edit' %}
+{% block title %}{{ 'Edit Invoice' if is_edit else 'New Invoice' }} - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="page-title">
+    <div>
+        <p class="eyebrow">{{ invoice.invoice_number }}</p>
+        <h1>{{ 'Edit Invoice' if is_edit else 'New Invoice' }}</h1>
+        <p class="page-subtitle">Build a clean invoice with totals, payments, and balance due.</p>
+    </div>
+    <a class="button ghost" href="{{ url_for('invoices') }}">Back</a>
+</section>
+
+<form class="invoice-builder" method="post" data-invoice-form>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="motor_id" value="{{ invoice.motor_id }}">
+
+    <section class="invoice-paper">
+        <div class="invoice-head">
+            <div class="invoice-left">
+                <a class="invoice-logo-box" href="{{ url_for('settings') }}">
+                    {% if settings.logo_filename %}
+                        <img src="{{ url_for('uploaded_file', filename=settings.logo_filename) }}" alt="{{ settings.shop_name }} logo">
+                    {% else %}
+                        <span>+ Add Your Logo</span>
+                    {% endif %}
+                </a>
+                <label>
+                    <span>Who is this from?</span>
+                    <textarea name="from_details" rows="3" placeholder="Your shop name, phone, address">{{ invoice.from_details }}</textarea>
+                </label>
+            </div>
+            <div class="invoice-right">
+                <h2>INVOICE</h2>
+                <label class="invoice-number-field">
+                    <span>#</span>
+                    <input type="text" name="invoice_number" value="{{ invoice.invoice_number }}" required>
+                </label>
+            </div>
+        </div>
+
+        <div class="invoice-meta-grid">
+            <label>
+                <span>Bill To</span>
+                <textarea name="bill_to" rows="3" placeholder="Who is this to?" required>{{ invoice.bill_to }}</textarea>
+            </label>
+            <label>
+                <span>Ship To</span>
+                <textarea name="ship_to" rows="3" placeholder="Optional">{{ invoice.ship_to }}</textarea>
+            </label>
+            <div class="invoice-date-fields">
+                <label>
+                    <span>Date</span>
+                    <input type="date" name="invoice_date" value="{{ invoice.invoice_date }}" required>
+                </label>
+                <label>
+                    <span>Payment Terms</span>
+                    <input type="text" name="payment_terms" value="{{ invoice.payment_terms }}">
+                </label>
+                <label>
+                    <span>Due Date</span>
+                    <input type="date" name="due_date" value="{{ invoice.due_date }}">
+                </label>
+                <label>
+                    <span>PO Number</span>
+                    <input type="text" name="po_number" value="{{ invoice.po_number }}">
+                </label>
+            </div>
+        </div>
+
+        <div class="invoice-items" data-invoice-items>
+            <div class="invoice-item-header">
+                <span>Item</span>
+                <span>Quantity</span>
+                <span>Rate</span>
+                <span>Amount</span>
+                <span></span>
+            </div>
+            {% for item in items %}
+                <div class="invoice-item-row" data-invoice-row>
+                    <input type="text" name="item_description[]" value="{{ item.description }}" placeholder="Description of item/service..." required>
+                    <input type="number" name="item_quantity[]" value="{{ item.quantity }}" min="0.01" step="0.01" data-qty required>
+                    <input type="number" name="item_rate[]" value="{{ item.rate }}" min="0" step="0.01" data-rate required>
+                    <strong data-line-amount>{{ item.amount|money }}</strong>
+                    <button class="icon-button" type="button" data-remove-line aria-label="Remove line">&times;</button>
+                </div>
+            {% endfor %}
+        </div>
+        <button class="button small invoice-add-line" type="button" data-add-line>+ Line Item</button>
+
+        <div class="invoice-bottom">
+            <div class="invoice-notes">
+                <label>
+                    <span>Notes</span>
+                    <textarea name="notes" rows="3" placeholder="Notes - any relevant information not already covered">{{ invoice.notes }}</textarea>
+                </label>
+                <label>
+                    <span>Terms</span>
+                    <textarea name="terms" rows="3" placeholder="Terms and conditions - payment methods, delivery schedule">{{ invoice.terms }}</textarea>
+                </label>
+            </div>
+            <div class="invoice-totals">
+                <div>
+                    <span>Subtotal</span>
+                    <strong data-subtotal>{{ invoice.subtotal|money }}</strong>
+                </div>
+                <label>
+                    <span>Tax</span>
+                    <input type="number" name="tax_rate" value="{{ invoice.tax_rate }}" min="0" max="100" step="0.01" data-tax-rate>
+                </label>
+                <label>
+                    <span>Discount</span>
+                    <input type="number" name="discount_amount" value="{{ invoice.discount_amount }}" min="0" step="0.01" data-discount>
+                </label>
+                <label>
+                    <span>Shipping</span>
+                    <input type="number" name="shipping_amount" value="{{ invoice.shipping_amount }}" min="0" step="0.01" data-shipping>
+                </label>
+                <div class="invoice-total-row">
+                    <span>Total</span>
+                    <strong data-total>{{ invoice.total|money }}</strong>
+                </div>
+                <label>
+                    <span>Amount Paid</span>
+                    <input type="number" name="amount_paid" value="{{ invoice.amount_paid }}" min="0" step="0.01" data-paid>
+                </label>
+                <div class="invoice-balance-row">
+                    <span>Balance Due</span>
+                    <strong data-balance>{{ invoice.balance_due|money }}</strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="form-actions">
+        <button class="button primary" type="submit">{{ 'Save Invoice' if is_edit else 'Create Invoice' }}</button>
+        <a class="button ghost" href="{{ url_for('invoices') }}">Cancel</a>
+    </div>
+</form>
+{% endblock %}

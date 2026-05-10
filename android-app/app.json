@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Motor Repair Manager",
+    "slug": "motor-repair-manager",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "motorrepair",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.rewindin.motorrepairmanager",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "POST_NOTIFICATIONS",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Motor Repair Manager to attach motor photos and videos.",
+          "cameraPermission": "Allow Motor Repair Manager to take motor photos and videos."
+        }
+      ],
+      "expo-sqlite"
+    ]
+  }
+}

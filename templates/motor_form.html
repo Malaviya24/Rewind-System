@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% set is_edit = mode == 'edit' %}
+{% block title %}{{ 'Edit Motor' if is_edit else 'Add Motor' }} - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="page-title">
+    <div>
+        <p class="eyebrow">{{ 'Update repair details' if is_edit else 'New repair entry' }}</p>
+        <h1>{{ 'Edit Motor' if is_edit else 'Add Motor' }}</h1>
+        <p class="page-subtitle">Enter customer, repair, payment, deadline, photos, and videos.</p>
+    </div>
+    <a class="button ghost" href="{{ url_for('motors') }}">Back</a>
+</section>
+
+<form class="entry-form" method="post" enctype="multipart/form-data" novalidate>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="original_payment_status" value="{{ motor.payment_status or 'Unpaid' }}">
+
+    <div class="form-section">
+        <div class="section-heading">
+            <h2>Customer</h2>
+            <span>Contact details</span>
+        </div>
+        <div class="form-grid">
+            <label>
+                <span>Customer Name</span>
+                <input type="text" name="customer_name" value="{{ motor.customer_name }}" maxlength="255" required>
+            </label>
+            <label>
+                <span>Phone Number</span>
+                <input type="tel" name="phone_number" value="{{ motor.phone_number }}" maxlength="20" required>
+            </label>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <div class="section-heading">
+            <h2>Repair</h2>
+            <span>Motor, cost, and schedule</span>
+        </div>
+        <div class="form-grid">
+            <label>
+                <span>Motor Type</span>
+                <input type="text" name="motor_type" value="{{ motor.motor_type }}" maxlength="255" required>
+            </label>
+            <label>
+                <span>Estimated Cost</span>
+                <input type="number" name="estimated_cost" value="{{ motor.estimated_cost }}" min="0" max="10000000" step="0.01" required>
+            </label>
+            <label>
+                <span>Final Cost</span>
+                <input type="number" name="final_cost" value="{{ motor.final_cost }}" min="0" max="10000000" step="0.01">
+            </label>
+            <label>
+                <span>Advance Paid</span>
+                <input type="number" name="advance_paid" value="{{ motor.advance_paid }}" min="0" max="10000000" step="0.01">
+            </label>
+            <label>
+                <span>Payment Status</span>
+                <select name="payment_status">
+                    {% for payment_status in payment_statuses %}
+                        <option value="{{ payment_status }}" {{ 'selected' if motor.payment_status == payment_status else '' }}>{{ payment_status }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                <span>Status</span>
+                <select name="status" required>
+                    {% for status in repair_statuses %}
+                        <option value="{{ status }}" {{ 'selected' if motor.status == status else '' }}>{{ status }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                <span>Deadline Date</span>
+                <input type="date" name="deadline_date" value="{{ motor.deadline_date }}" required>
+            </label>
+        </div>
+
+        <label class="full-field">
+            <span>Problem Description</span>
+            <textarea name="problem_description" rows="5" maxlength="1500" required>{{ motor.problem_description }}</textarea>
+        </label>
+    </div>
+
+    <div class="form-section">
+        <div class="section-heading">
+            <h2>Media Gallery</h2>
+            <span>Multiple photos or videos</span>
+        </div>
+        <div class="upload-row">
+            <label class="file-field">
+                <span>Upload Multiple Photos / Videos</span>
+                <input id="media" type="file" name="media" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime,video/x-m4v" multiple>
+                <small class="field-hint">Allowed: PNG, JPG, GIF, WEBP, MP4, WEBM, MOV, M4V. Total upload limit 128 MB.</small>
+            </label>
+            <div class="image-preview media-preview" data-media-preview>
+                <span>No new media selected</span>
+            </div>
+        </div>
+
+        {% if motor.media %}
+            <div class="existing-media-grid" aria-label="Existing motor media" data-media-gallery>
+                {% for media in motor.media %}
+                    <article class="existing-media-card">
+                        <div class="existing-media-preview">
+                            {% if media.media_type == 'video' %}
+                                <video src="{{ url_for('uploaded_file', filename=media.filename) }}" controls preload="metadata"></video>
+                                <button
+                                    class="media-open-overlay"
+                                    type="button"
+                                    data-media-open
+                                    data-media-src="{{ url_for('uploaded_file', filename=media.filename) }}"
+                                    data-media-type="video"
+                                    data-media-title="{{ motor.customer_name }} - Video {{ loop.index }}"
+                                >
+                                    Open video
+                                </button>
+                            {% else %}
+                                <button
+                                    class="media-open-button existing-media-button"
+                                    type="button"
+                                    data-media-open
+                                    data-media-src="{{ url_for('uploaded_file', filename=media.filename) }}"
+                                    data-media-type="image"
+                                    data-media-title="{{ motor.customer_name }} - Photo {{ loop.index }}"
+                                >
+                                    <img src="{{ url_for('uploaded_file', filename=media.filename) }}" alt="Motor media {{ loop.index }}">
+                                    <span>Open image</span>
+                                </button>
+                            {% endif %}
+                        </div>
+                        <div class="existing-media-meta">
+                            <strong>{{ 'Video' if media.media_type == 'video' else 'Photo' }} {{ loop.index }}</strong>
+                            {% if media.id %}
+                                <label class="delete-media-option">
+                                    <input type="checkbox" name="delete_media" value="{{ media.id }}">
+                                    <span>Remove</span>
+                                </label>
+                            {% endif %}
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="form-actions">
+        <button class="button primary" type="submit">{{ 'Save Changes' if is_edit else 'Add Motor' }}</button>
+        <a class="button ghost" href="{{ url_for('motors') }}">Cancel</a>
+    </div>
+</form>
+{% endblock %}

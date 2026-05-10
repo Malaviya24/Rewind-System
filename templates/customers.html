@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Customers - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="customer-command">
+    <div class="customer-command-copy">
+        <p class="eyebrow">Customer operations</p>
+        <h1>Customer Desk</h1>
+        <p>Review repeat customers, repair history, balances, and follow-up actions from one focused workspace.</p>
+    </div>
+    <div class="customer-command-actions">
+        <a class="button ghost" href="{{ url_for('customers') }}">All Customers</a>
+        <a class="button primary" href="{{ url_for('add_motor') }}">Add Motor</a>
+    </div>
+</section>
+
+<section class="customer-summary-grid" aria-label="Customer summary">
+    <article class="customer-summary-card">
+        <span>Customers</span>
+        <strong>{{ customer_summary.total_customers or 0 }}</strong>
+        <small>{{ customer_summary.total_jobs or 0 }} repair jobs</small>
+    </article>
+    <article class="customer-summary-card value">
+        <span>Total value</span>
+        <strong>{{ customer_summary.total_value|money }}</strong>
+        <small>{{ customer_summary.total_paid|money }} collected</small>
+    </article>
+    <article class="customer-summary-card balance">
+        <span>Balance due</span>
+        <strong>{{ customer_summary.balance_due|money }}</strong>
+        <small>Outstanding customer amount</small>
+    </article>
+</section>
+
+<section class="customer-search-panel">
+    <form class="filter-bar customer-search" method="get" action="{{ url_for('customers') }}">
+        <label>
+            <span>Search</span>
+            <input type="search" name="q" value="{{ search }}" placeholder="Name or phone">
+        </label>
+        <button class="button" type="submit">Search</button>
+        <a class="button ghost" href="{{ url_for('customers') }}">Clear</a>
+    </form>
+</section>
+
+<section class="customer-layout customer-workspace">
+    <aside class="customer-panel customer-directory-panel">
+        <div class="customer-section-header">
+            <div>
+                <p class="eyebrow">{{ customers|length }} result{{ '' if customers|length == 1 else 's' }}</p>
+                <h2>Customer Directory</h2>
+            </div>
+        </div>
+        {% if customers %}
+            <div class="customer-list">
+                {% for customer in customers %}
+                    <a class="customer-row {{ 'active' if selected_phone == customer.phone_number else '' }}" href="{{ url_for('customers', phone=customer.phone_number, q=search) }}">
+                        <span class="customer-avatar">{{ customer.customer_name[:1] }}</span>
+                        <span class="customer-row-main">
+                            <strong>{{ customer.customer_name }}</strong>
+                            <small>{{ customer.phone_number }}</small>
+                            <small>Last repair {{ customer.last_repair_date|display_date }}</small>
+                        </span>
+                        <span class="customer-row-meta">
+                            <strong>{{ customer.balance_due|money }}</strong>
+                            <small>{{ customer.total_jobs }} job{{ '' if customer.total_jobs == 1 else 's' }}</small>
+                        </span>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="customer-empty">
+                <strong>No customer history found</strong>
+                <p>Add a repair job or adjust the current search.</p>
+                <a class="button primary small" href="{{ url_for('add_motor') }}">Add Motor</a>
+            </div>
+        {% endif %}
+    </aside>
+
+    <section class="customer-panel customer-history-panel">
+        <div class="customer-section-header">
+            <div>
+                <p class="eyebrow">Repair history</p>
+                {% if selected_customer %}
+                    <h2>{{ selected_customer.customer_name }}</h2>
+                    <p>{{ selected_customer.phone_number }} - {{ selected_customer.total_jobs }} job{{ '' if selected_customer.total_jobs == 1 else 's' }}</p>
+                {% else %}
+                    <h2>Repair History</h2>
+                    <p>Choose a customer to review previous jobs, balances, receipts, and invoices.</p>
+                {% endif %}
+            </div>
+            {% if selected_customer %}
+                <div class="customer-profile-actions">
+                    <div class="customer-profile-totals">
+                        <span>Balance</span>
+                        <strong>{{ selected_customer.balance_due|money }}</strong>
+                    </div>
+                    <a
+                        class="button small primary"
+                        href="{{ url_for('motors', q=selected_customer.phone_number) }}"
+                    >
+                        View Motors
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+        {% if history %}
+            <div class="history-list">
+                {% for motor in history %}
+                    <article class="history-card">
+                        <div class="history-card-top">
+                            <div>
+                                <strong>{{ motor.job_number }}</strong>
+                                <p>{{ motor.motor_type }} - Added {{ motor.date_added|display_date }}</p>
+                            </div>
+                            <span class="status-badge {{ motor.status|status_slug }}">{{ motor.status }}</span>
+                        </div>
+                        <dl class="mini-grid">
+                            <div>
+                                <dt>Amount</dt>
+                                <dd>{{ repair_amount(motor)|money }}</dd>
+                            </div>
+                            <div>
+                                <dt>Paid</dt>
+                                <dd>{{ motor.advance_paid|money }}</dd>
+                            </div>
+                            <div>
+                                <dt>Balance</dt>
+                                <dd>{{ balance_amount(motor)|money }}</dd>
+                            </div>
+                            <div>
+                                <dt>Deadline</dt>
+                                <dd>{{ motor.deadline_date|display_date }}</dd>
+                            </div>
+                        </dl>
+                        <p class="history-problem">{{ motor.problem_description }}</p>
+                        <div class="card-actions">
+                            <a class="button small" href="{{ url_for('edit_motor', motor_id=motor.id) }}">Edit</a>
+                            <a class="button small" href="{{ url_for('receipt', motor_id=motor.id) }}">Receipt</a>
+                            <a class="button small" href="{{ url_for('new_invoice', motor_id=motor.id) }}">Invoice</a>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="customer-empty">
+                <strong>{{ 'No repair history for this customer' if selected_phone else 'Select a customer' }}</strong>
+                <p>{{ 'This customer has no active history records.' if selected_phone else 'Pick a customer from the directory to see their repair timeline.' }}</p>
+            </div>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

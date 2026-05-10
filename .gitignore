@@ -1,0 +1,41 @@
+license-secrets/
+*.private.pem
+license-private.pem
+
+# Local runtime data
+database.db
+*.db-journal
+uploads/
+backups/
+qa-evidence/
+.package-test-data/
+.rewindin-regression-*/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Build outputs
+build/
+dist/
+android-app/.android-build-tools/
+android-app/.expo/
+android-app/.gradle-user-home/
+android-app/dist/
+android-app/node_modules/
+android-app/android/.gradle/
+android-app/android/build/
+android-app/android/app/build/
+android-app/android/local.properties
+android-app/android/app/debug.keystore
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Motor List - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="motor-command">
+    <div class="motor-command-copy">
+        <p class="eyebrow">Repair operations</p>
+        <h1>Motor Workboard</h1>
+        <p>Track intake, media, repair stage, payment, deadline, and customer follow-up from one screen.</p>
+    </div>
+    <div class="motor-command-actions">
+        <a class="button ghost" href="{{ url_for('motors', filter='overdue') }}">Overdue</a>
+        <a class="button ghost" href="{{ url_for('motors', filter='unpaid') }}">Unpaid</a>
+        <a class="button primary" href="{{ url_for('add_motor') }}">Add Motor</a>
+    </div>
+</section>
+
+<section class="motor-summary-grid" aria-label="Motor summary">
+    <article class="motor-summary-card">
+        <span>Results</span>
+        <strong>{{ motor_summary.filtered_count or 0 }}</strong>
+        <small>{{ motor_summary.total_motors or 0 }} total jobs</small>
+    </article>
+    <article class="motor-summary-card open">
+        <span>Open repairs</span>
+        <strong>{{ motor_summary.open_repairs or 0 }}</strong>
+        <small>{{ motor_summary.motors_today or 0 }} added today</small>
+    </article>
+    <article class="motor-summary-card danger">
+        <span>Overdue</span>
+        <strong>{{ motor_summary.overdue_repairs or 0 }}</strong>
+        <small>Past deadline</small>
+    </article>
+    <article class="motor-summary-card money">
+        <span>Pending balance</span>
+        <strong>{{ motor_summary.pending_balance|money }}</strong>
+        <small>{{ motor_summary.unpaid_jobs or 0 }} unpaid jobs</small>
+    </article>
+</section>
+
+<section class="motor-filter-panel">
+    <div class="motor-filter-tabs" aria-label="Motor filters">
+        <a class="{{ 'active' if active_filter == 'all' else '' }}" href="{{ url_for('motors', filter='all', period=period_filter.period, date=period_filter.date, month=period_filter.month, start_date=period_filter.start_date, end_date=period_filter.end_date, q=search) }}">All</a>
+        <a class="{{ 'active' if active_filter == 'today' else '' }}" href="{{ url_for('motors', filter='today', period=period_filter.period, date=period_filter.date, month=period_filter.month, start_date=period_filter.start_date, end_date=period_filter.end_date, q=search) }}">Today</a>
+        <a class="{{ 'active' if active_filter == 'pending' else '' }}" href="{{ url_for('motors', filter='pending', period=period_filter.period, date=period_filter.date, month=period_filter.month, start_date=period_filter.start_date, end_date=period_filter.end_date, q=search) }}">Open</a>
+        <a class="{{ 'active' if active_filter == 'completed' else '' }}" href="{{ url_for('motors', filter='completed', period=period_filter.period, date=period_filter.date, month=period_filter.month, start_date=period_filter.start_date, end_date=period_filter.end_date, q=search) }}">Done</a>
+        <a class="{{ 'active' if active_filter == 'overdue' else '' }}" href="{{ url_for('motors', filter='overdue', period=period_filter.period, date=period_filter.date, month=period_filter.month, start_date=period_filter.start_date, end_date=period_filter.end_date, q=search) }}">Overdue</a>
+        <a class="{{ 'active' if active_filter == 'unpaid' else '' }}" href="{{ url_for('motors', filter='unpaid', period=period_filter.period, date=period_filter.date, month=period_filter.month, start_date=period_filter.start_date, end_date=period_filter.end_date, q=search) }}">Unpaid</a>
+        <span class="motor-filter-context">{{ period_filter.label }}</span>
+    </div>
+
+    <form class="filter-bar motor-filter-form" method="get" action="{{ url_for('motors') }}" data-period-filter>
+        <label>
+            <span>Search</span>
+            <input type="search" name="q" value="{{ search }}" placeholder="Job, name or phone">
+        </label>
+        <label>
+            <span>Filter</span>
+            <select name="filter">
+                <option value="all" {{ 'selected' if active_filter == 'all' else '' }}>All motors</option>
+                <option value="today" {{ 'selected' if active_filter == 'today' else '' }}>Today</option>
+                <option value="pending" {{ 'selected' if active_filter == 'pending' else '' }}>Open repairs</option>
+                <option value="completed" {{ 'selected' if active_filter == 'completed' else '' }}>Completed</option>
+                <option value="overdue" {{ 'selected' if active_filter == 'overdue' else '' }}>Overdue</option>
+                <option value="unpaid" {{ 'selected' if active_filter == 'unpaid' else '' }}>Unpaid balance</option>
+            </select>
+        </label>
+        <label>
+            <span>Date Filter</span>
+            <select name="period" data-period-select>
+                <option value="all" {{ 'selected' if period_filter.period == 'all' else '' }}>All dates</option>
+                <option value="today" {{ 'selected' if period_filter.period == 'today' else '' }}>Today</option>
+                <option value="day" {{ 'selected' if period_filter.period == 'day' else '' }}>Single date</option>
+                <option value="month" {{ 'selected' if period_filter.period == 'month' else '' }}>Month</option>
+                <option value="range" {{ 'selected' if period_filter.period == 'range' else '' }}>Start to end range</option>
+            </select>
+        </label>
+        <label class="motor-period-input" data-period-input="day">
+            <span>Date</span>
+            <input type="date" name="date" value="{{ period_filter.date }}">
+        </label>
+        <label class="motor-period-input" data-period-input="month">
+            <span>Month</span>
+            <input type="month" name="month" value="{{ period_filter.month }}">
+        </label>
+        <label class="motor-period-input" data-period-input="range">
+            <span>Start Date</span>
+            <input type="date" name="start_date" value="{{ period_filter.start_date }}" data-range-start>
+        </label>
+        <label class="motor-period-input" data-period-input="range">
+            <span>End Date</span>
+            <input type="date" name="end_date" value="{{ period_filter.end_date }}" data-range-end>
+        </label>
+        <button class="button" type="submit">Apply</button>
+        <a class="button ghost" href="{{ url_for('motors') }}">Clear</a>
+    </form>
+</section>
+
+{% if motors %}
+    <section class="motor-grid" aria-label="Motor entries">
+        {% for motor in motors %}
+            {% set is_overdue = motor.status not in done_statuses and motor.deadline_date < today %}
+            <article class="motor-card {{ 'overdue' if is_overdue else '' }}">
+                <figure class="motor-image motor-media" data-media-gallery data-media-carousel>
+                    {% if motor.primary_media %}
+                        {% set preview_media = motor.primary_media %}
+                        <div class="primary-media">
+                            <button
+                                class="media-open-button primary-media-button {{ 'is-video' if preview_media.media_type == 'video' else '' }}"
+                                type="button"
+                                data-media-open
+                                data-carousel-main
+                                data-carousel-index="0"
+                                data-media-src="{{ url_for('uploaded_file', filename=preview_media.filename) }}"
+                                data-media-type="{{ preview_media.media_type }}"
+                                data-media-title="{{ motor.customer_name }} - {{ motor.motor_type }}"
+                            >
+                                {% if preview_media.media_type == 'video' %}
+                                    <video src="{{ url_for('uploaded_file', filename=preview_media.filename) }}" muted preload="metadata"></video>
+                                {% else %}
+                                    <img src="{{ url_for('uploaded_file', filename=preview_media.filename) }}" alt="{{ motor.motor_type }} image">
+                                {% endif %}
+                            </button>
+                        </div>
+                        <figcaption class="media-count">{{ motor.media|length }} file{{ '' if motor.media|length == 1 else 's' }}</figcaption>
+                        {% if motor.media|length > 1 %}
+                            <div class="media-carousel-controls">
+                                <button class="media-step" type="button" data-carousel-prev aria-label="Previous motor media">‹</button>
+                                <button class="media-step" type="button" data-carousel-next aria-label="Next motor media">›</button>
+                            </div>
+                            <div class="media-strip" aria-label="Motor media thumbnails">
+                                {% for media in motor.media[:6] %}
+                                    <button
+                                        class="media-thumb {{ media.media_type }} {{ 'active' if loop.index0 == 0 else '' }}"
+                                        type="button"
+                                        data-media-open
+                                        data-carousel-select
+                                        data-carousel-index="{{ loop.index0 }}"
+                                        data-media-src="{{ url_for('uploaded_file', filename=media.filename) }}"
+                                        data-media-type="{{ media.media_type }}"
+                                        data-media-title="{{ motor.customer_name }} - {{ 'Video' if media.media_type == 'video' else 'Photo' }} {{ loop.index }}"
+                                    >
+                                        {% if media.media_type == 'video' %}
+                                            Video
+                                        {% else %}
+                                            <img src="{{ url_for('uploaded_file', filename=media.filename) }}" alt="Motor photo {{ loop.index }}">
+                                        {% endif %}
+                                    </button>
+                                {% endfor %}
+                                {% if motor.media|length > 6 %}
+                                    <button
+                                        class="media-thumb more"
+                                        type="button"
+                                        data-media-open
+                                        data-carousel-select
+                                        data-carousel-index="6"
+                                        data-media-src="{{ url_for('uploaded_file', filename=motor.media[6].filename) }}"
+                                        data-media-type="{{ motor.media[6].media_type }}"
+                                        data-media-title="{{ motor.customer_name }} - {{ 'Video' if motor.media[6].media_type == 'video' else 'Photo' }} 7"
+                                    >
+                                        +{{ motor.media|length - 6 }}
+                                    </button>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                        <div class="media-gallery-items" hidden>
+                            {% for media in motor.media %}
+                                <button
+                                    type="button"
+                                    data-media-open
+                                    data-carousel-item
+                                    data-carousel-index="{{ loop.index0 }}"
+                                    data-media-src="{{ url_for('uploaded_file', filename=media.filename) }}"
+                                    data-media-type="{{ media.media_type }}"
+                                    data-media-title="{{ motor.customer_name }} - {{ 'Video' if media.media_type == 'video' else 'Photo' }} {{ loop.index }}"
+                                ></button>
+                            {% endfor %}
+                        </div>
+                    {% elif motor.image_filename %}
+                        <div class="primary-media">
+                            <button
+                                class="media-open-button primary-media-button"
+                                type="button"
+                                data-media-open
+                                data-media-src="{{ url_for('uploaded_file', filename=motor.image_filename) }}"
+                                data-media-type="image"
+                                data-media-title="{{ motor.customer_name }} - {{ motor.motor_type }}"
+                            >
+                                <img src="{{ url_for('uploaded_file', filename=motor.image_filename) }}" alt="{{ motor.motor_type }} image">
+                            </button>
+                        </div>
+                    {% else %}
+                        <span>No image</span>
+                    {% endif %}
+                </figure>
+                <div class="motor-body">
+                    <div class="card-topline">
+                        <div class="motor-status-stack">
+                            <span class="status-badge {{ motor.status|status_slug }}">{{ motor.status }}</span>
+                            {% if is_overdue %}
+                                <span class="overdue-alert">Repair overdue</span>
+                            {% endif %}
+                        </div>
+                        <span class="motor-card-job">{{ motor.job_number }}</span>
+                    </div>
+                    <div class="motor-title-line">
+                        <h2>{{ motor.customer_name }}</h2>
+                        <p class="motor-meta">Added {{ motor.date_added|display_date }}</p>
+                    </div>
+                    <dl class="detail-grid">
+                        <div>
+                            <dt>Job</dt>
+                            <dd>{{ motor.job_number }}</dd>
+                        </div>
+                        <div>
+                            <dt>Phone</dt>
+                            <dd><a href="tel:{{ motor.phone_number }}">{{ motor.phone_number }}</a></dd>
+                        </div>
+                        <div>
+                            <dt>Motor</dt>
+                            <dd>{{ motor.motor_type }}</dd>
+                        </div>
+                        <div>
+                            <dt>Amount</dt>
+                            <dd>{{ repair_amount(motor)|money }}</dd>
+                        </div>
+                        <div>
+                            <dt>Paid</dt>
+                            <dd>{{ motor.advance_paid|money }}</dd>
+                        </div>
+                        <div>
+                            <dt>Balance</dt>
+                            <dd>{{ balance_amount(motor)|money }}</dd>
+                        </div>
+                        <div>
+                            <dt>Payment</dt>
+                            <dd>
+                                <div class="payment-quick-control">
+                                    <span class="payment-badge {{ motor.payment_status|status_slug }}">{{ motor.payment_status }}</span>
+                                    <div class="payment-switch" aria-label="Quick payment status">
+                                        <form method="post" action="{{ url_for('update_motor_payment', motor_id=motor.id) }}">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                            <input type="hidden" name="payment_status" value="Unpaid">
+                                            <button class="payment-switch-button unpaid {{ 'active' if motor.payment_status == 'Unpaid' else '' }}" type="submit" {{ 'disabled' if motor.payment_status == 'Unpaid' else '' }}>Unpaid</button>
+                                        </form>
+                                        <form method="post" action="{{ url_for('update_motor_payment', motor_id=motor.id) }}">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                            <input type="hidden" name="payment_status" value="Paid">
+                                            <button class="payment-switch-button paid {{ 'active' if motor.payment_status == 'Paid' else '' }}" type="submit" {{ 'disabled' if motor.payment_status == 'Paid' else '' }}>Paid</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>Deadline</dt>
+                            <dd>{{ motor.deadline_date|display_date }}</dd>
+                        </div>
+                    </dl>
+                    <p class="problem-text">{{ motor.problem_description }}</p>
+                    <div class="card-actions">
+                        <a class="button small" href="{{ url_for('edit_motor', motor_id=motor.id) }}">Edit</a>
+                        <a class="button small whatsapp" href="{{ whatsapp_url(motor) }}" target="_blank" rel="noopener">WhatsApp</a>
+                        <form class="status-quick-form" method="post" action="{{ url_for('update_motor_status', motor_id=motor.id) }}">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                            <label class="status-quick-label">
+                                <span>Status</span>
+                                <select
+                                    class="status-quick-select"
+                                    name="status"
+                                    aria-label="Change repair status for {{ motor.job_number }}"
+                                    autocomplete="off"
+                                    data-submit-on-change
+                                    onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"
+                                >
+                                    {% for status in repair_statuses %}
+                                        <option value="{{ status }}" {{ 'selected' if motor.status == status else '' }}>{{ status }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <button class="button small status-quick-button" type="submit">Save</button>
+                        </form>
+                        <form method="post" action="{{ url_for('delete_motor', motor_id=motor.id) }}" data-confirm="Delete this motor entry?">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                            <input class="pin-input" type="password" name="delete_pin" placeholder="PIN" inputmode="numeric" autocomplete="off" required>
+                            <button class="button small danger" type="submit">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+        {% endfor %}
+    </section>
+{% else %}
+    <section class="empty-panel">
+        <h2>No motors found</h2>
+        <p>Add a new repair entry or adjust the current filter.</p>
+        <a class="button primary" href="{{ url_for('add_motor') }}">Add Motor</a>
+    </section>
+{% endif %}
+{% endblock %}

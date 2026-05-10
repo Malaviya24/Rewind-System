@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Invoices - Motor Repair Manager{% endblock %}
+
+{% block content %}
+<section class="page-title">
+    <div>
+        <p class="eyebrow">{{ invoices|length }} invoice{{ '' if invoices|length == 1 else 's' }}</p>
+        <h1>Invoices</h1>
+        <p class="page-subtitle">Create invoices manually or import motor job details.</p>
+    </div>
+    <a class="button primary" href="{{ url_for('new_invoice') }}">New Invoice</a>
+</section>
+
+<form class="filter-bar invoice-import-bar" method="get" action="{{ url_for('new_invoice') }}">
+    <label>
+        <span>Import From Motor Job</span>
+        <select name="motor_id" required>
+            <option value="">Choose motor job</option>
+            {% for motor in motors_for_import %}
+                <option value="{{ motor.id }}">{{ motor.job_number }} - {{ motor.customer_name }} - {{ motor.motor_type }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button class="button" type="submit">Import</button>
+</form>
+
+<form class="filter-bar customer-search" method="get" action="{{ url_for('invoices') }}">
+    <label>
+        <span>Search</span>
+        <input type="search" name="q" value="{{ search }}" placeholder="Invoice, customer, PO or job">
+    </label>
+    <button class="button" type="submit">Search</button>
+    <a class="button ghost" href="{{ url_for('invoices') }}">Clear</a>
+</form>
+
+<section class="stats-grid" aria-label="Invoice summary">
+    <article class="stat-card">
+        <span>Total invoices</span>
+        <strong>{{ stats.total_invoices or 0 }}</strong>
+    </article>
+    <article class="stat-card">
+        <span>Invoice value</span>
+        <strong>{{ stats.invoice_total|money }}</strong>
+    </article>
+    <article class="stat-card success">
+        <span>Paid</span>
+        <strong>{{ stats.paid_total|money }}</strong>
+    </article>
+    <article class="stat-card warning">
+        <span>Balance due</span>
+        <strong>{{ stats.balance_total|money }}</strong>
+    </article>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <h2>Invoice List</h2>
+    </div>
+    {% if invoices %}
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Invoice</th>
+                        <th>Customer</th>
+                        <th>Date</th>
+                        <th>Motor Job</th>
+                        <th>Total</th>
+                        <th>Balance</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices %}
+                        <tr>
+                            <td><strong>{{ invoice.invoice_number }}</strong></td>
+                            <td>{{ invoice.bill_to.replace('\n', ', ') }}</td>
+                            <td>{{ invoice.invoice_date|display_date }}</td>
+                            <td>{{ invoice.motor_job_number or invoice.po_number or '-' }}</td>
+                            <td>{{ invoice.total|money }}</td>
+                            <td>{{ invoice.balance_due|money }}</td>
+                            <td>
+                                <div class="table-actions">
+                                    <a class="button small" href="{{ url_for('view_invoice', invoice_id=invoice.id) }}">View</a>
+                                    <a class="button small" href="{{ url_for('edit_invoice', invoice_id=invoice.id) }}">Edit</a>
+                                    <form method="post" action="{{ url_for('delete_invoice', invoice_id=invoice.id) }}" data-confirm="Delete this invoice?">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                        <input class="pin-input" type="password" name="delete_pin" placeholder="PIN" inputmode="numeric" required>
+                                        <button class="button small danger" type="submit">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty-state">No invoices yet. Create one manually or import from a motor job.</p>
+    {% endif %}
+</section>
+{% endblock %}
