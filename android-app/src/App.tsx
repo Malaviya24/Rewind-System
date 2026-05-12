@@ -3,6 +3,7 @@ import * as Crypto from "expo-crypto";
 import * as Notifications from "expo-notifications";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, BackHandler, Easing, Image, Linking, Modal, Pressable, SafeAreaView, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
@@ -61,6 +62,14 @@ type DashboardFilterMode = "All" | "Today" | "Date" | "Month" | "Range";
 type PickerMode = "date" | "month";
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
   const { ready, error } = useAppDatabase();
   const [screenStack, setScreenStack] = useState<ScreenName[]>(["dashboard"]);
   const [selectedMotorUuid, setSelectedMotorUuid] = useState<string | null>(null);

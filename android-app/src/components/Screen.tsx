@@ -1,10 +1,13 @@
 import { PropsWithChildren, ReactNode, useEffect, useRef } from "react";
 import { Animated, Easing, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/theme";
 
 type NavScreen = "dashboard" | "motors" | "customers" | "workers" | "settings";
+const BOTTOM_NAV_HEIGHT = 66;
+const BOTTOM_NAV_EXTRA_SCROLL_SPACE = spacing.xxl * 2;
 
 type Props = PropsWithChildren<{
   title: string;
@@ -15,7 +18,10 @@ type Props = PropsWithChildren<{
 }>;
 
 export function Screen({ title, eyebrow, action, children, activeTab, onNavigate }: Props) {
+  const insets = useSafeAreaInsets();
   const contentMotion = useRef(new Animated.Value(0)).current;
+  const bottomNavOffset = Math.max(spacing.lg, insets.bottom + spacing.sm);
+  const contentBottomPadding = BOTTOM_NAV_HEIGHT + bottomNavOffset + BOTTOM_NAV_EXTRA_SCROLL_SPACE;
 
   useEffect(() => {
     contentMotion.setValue(0);
@@ -34,7 +40,10 @@ export function Screen({ title, eyebrow, action, children, activeTab, onNavigate
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
+      >
         <Animated.View renderToHardwareTextureAndroid style={[styles.contentMotion, { transform: [{ translateY }] }]}>
           <View style={styles.header}>
             <View style={styles.headerText}>
@@ -46,7 +55,7 @@ export function Screen({ title, eyebrow, action, children, activeTab, onNavigate
           {children}
         </Animated.View>
       </ScrollView>
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { bottom: bottomNavOffset }]}>
         <NavItem icon="home" label="Home" active={activeTab === "dashboard"} onPress={() => onNavigate?.("dashboard")} />
         <NavItem icon="construct" label="Motors" active={activeTab === "motors"} onPress={() => onNavigate?.("motors")} />
         <NavItem icon="people" label="Customers" active={activeTab === "customers"} onPress={() => onNavigate?.("customers")} />
@@ -110,8 +119,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: 208
+    paddingTop: spacing.md
   },
   contentMotion: {
     gap: spacing.lg,
@@ -142,8 +150,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: spacing.md,
     right: spacing.md,
-    bottom: Platform.OS === "android" ? spacing.lg : spacing.md,
-    minHeight: 66,
+    minHeight: BOTTOM_NAV_HEIGHT,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.72)",
     borderRadius: 999,
