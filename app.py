@@ -162,6 +162,13 @@ def format_job_number(date_added, sequence):
     return f"MR-{year}-{int(sequence):04d}"
 
 
+def next_batch_number(db):
+    row = db.execute(
+        "SELECT COALESCE(MAX(batch_number), 0) + 1 AS next_bn FROM motors"
+    ).fetchone()
+    return row["next_bn"]
+
+
 def next_job_number(db):
     next_id = db.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM motors").fetchone()[0]
     candidate = format_job_number(date.today().isoformat(), next_id)
@@ -438,6 +445,22 @@ def ensure_app_meta_table(db):
     )
 
 
+def ensure_batch_number_column(db):
+    columns = {row[1] for row in db.execute("PRAGMA table_info(motors)").fetchall()}
+    if "batch_number" not in columns:
+        db.execute("ALTER TABLE motors ADD COLUMN batch_number INTEGER")
+        db.execute(
+            """
+            UPDATE motors SET batch_number = (
+                SELECT COUNT(*) FROM motors m2 WHERE m2.id <= motors.id
+            )
+            """
+        )
+        db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_motors_batch_number ON motors(batch_number)"
+        )
+
+
 def ensure_indexes(db):
     db.execute("CREATE INDEX IF NOT EXISTS idx_motors_job_number ON motors(job_number)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_motors_status ON motors(status)")
@@ -556,6 +579,7 @@ def init_db():
         ensure_workers_tables(db)
         ensure_invoice_tables(db)
         migrate_motors_table(db)
+        ensure_batch_number_column(db)
         ensure_motor_media_table(db)
         ensure_phone_import_tables(db)
         ensure_indexes(db)
@@ -1781,8 +1805,8 @@ def motors():
         params.extend(period_filter["params"])
 
     if search:
-        filters.append("(job_number LIKE ? OR customer_name LIKE ? OR phone_number LIKE ? OR motor_type LIKE ?)")
-        params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
+        filters.append("(job_number LIKE ? OR customer_name LIKE ? OR phone_number LIKE ? OR motor_type LIKE ? OR CAST(batch_number AS TEXT) LIKE ?)")
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%", f"{search}%"])
 
     where_clause = f"WHERE {' AND '.join(filters)}"
     query = f"""
@@ -1820,17 +1844,19 @@ def add_motor():
 
         now = datetime.now().isoformat(timespec="seconds")
         db = get_db()
+        batch_number = next_batch_number(db)
         cursor = db.execute(
             """
             INSERT INTO motors (
-                job_number, customer_name, phone_number, motor_type, problem_description,
+                job_number, batch_number, customer_name, phone_number, motor_type, problem_description,
                 image_filename, estimated_cost, final_cost, advance_paid, payment_status,
                 status, date_added, deadline_date, deleted_at, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
             """,
             (
                 next_job_number(db),
+                batch_number,
                 data["customer_name"],
                 data["phone_number"],
                 data["motor_type"],
@@ -2637,6 +2663,7 @@ def build_backup_data_json(db):
             {
                 "uuid": motor_uuid,
                 "job_number": motor["job_number"],
+                "batch_number": motor.get("batch_number"),
                 "customer_uuid": customer_uuid,
                 "customer_name": motor["customer_name"],
                 "phone_number": motor["phone_number"],
@@ -3044,7 +3071,8 @@ def import_phone_backup_json(temp_path, manifest, data):
                 UPDATE motors
                 SET customer_name = ?, phone_number = ?, motor_type = ?, problem_description = ?,
                     estimated_cost = ?, final_cost = ?, advance_paid = ?, payment_status = ?,
-                    status = ?, date_added = ?, deadline_date = ?, source_device_id = ?, updated_at = ?
+                    status = ?, date_added = ?, deadline_date = ?, source_device_id = ?, updated_at = ?,
+                    batch_number = COALESCE(?, batch_number)
                 WHERE id = ?
                 """,
                 (
@@ -3061,19 +3089,22 @@ def import_phone_backup_json(temp_path, manifest, data):
                     str(row.get("deadline_date") or date.today().isoformat())[:10],
                     source_device_id,
                     now,
+                    int(row.get("batch_number")) if row.get("batch_number") else None,
                     motor_id,
                 ),
             )
         else:
+            imported_batch = int(row.get("batch_number")) if row.get("batch_number") else None
+            batch_number = imported_batch if imported_batch else next_batch_number(db)
             cursor = db.execute(
                 """
                 INSERT INTO motors (
                     job_number, customer_name, phone_number, motor_type, problem_description,
                     image_filename, estimated_cost, final_cost, advance_paid, payment_status,
                     status, date_added, deadline_date, deleted_at, created_at, updated_at,
-                    phone_uuid, source_device_id
+                    phone_uuid, source_device_id, batch_number
                 )
-                VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
                 """,
                 (
                     unique_job_number(db, str(row.get("job_number") or "")),
@@ -3092,6 +3123,7 @@ def import_phone_backup_json(temp_path, manifest, data):
                     now,
                     uuid_value,
                     source_device_id,
+                    batch_number,
                 ),
             )
             motor_id = cursor.lastrowid
@@ -3319,9 +3351,12 @@ def import_phone_backup(temp_path, manifest):
                 stats["customers"] += 1
 
         if table_exists(phone_db, "motors"):
+            phone_motor_columns = {col[1] for col in phone_db.execute("PRAGMA table_info(motors)").fetchall()}
+            has_batch_number = "batch_number" in phone_motor_columns
             for row in phone_db.execute("SELECT * FROM motors ORDER BY id").fetchall():
                 status = row["status"] if row["status"] in REPAIR_STATUSES else map_old_status(row["status"])
                 payment_status = row["payment_status"] if row["payment_status"] in PAYMENT_STATUSES else calculate_payment_status(row["estimated_cost"], row["final_cost"], row["advance_paid"])
+                imported_batch = int(row["batch_number"]) if has_batch_number and row["batch_number"] else None
                 existing = db.execute("SELECT id FROM motors WHERE phone_uuid = ?", (row["uuid"],)).fetchone()
                 now = row["updated_at"] or datetime.now().isoformat(timespec="seconds")
                 if existing:
@@ -3331,7 +3366,8 @@ def import_phone_backup(temp_path, manifest):
                         UPDATE motors
                         SET customer_name = ?, phone_number = ?, motor_type = ?, problem_description = ?,
                             estimated_cost = ?, final_cost = ?, advance_paid = ?, payment_status = ?,
-                            status = ?, date_added = ?, deadline_date = ?, source_device_id = ?, updated_at = ?
+                            status = ?, date_added = ?, deadline_date = ?, source_device_id = ?, updated_at = ?,
+                            batch_number = COALESCE(?, batch_number)
                         WHERE id = ?
                         """,
                         (
@@ -3348,19 +3384,21 @@ def import_phone_backup(temp_path, manifest):
                             row["deadline_date"],
                             source_device_id,
                             now,
+                            imported_batch,
                             motor_id,
                         ),
                     )
                 else:
+                    batch_number = imported_batch if imported_batch else next_batch_number(db)
                     cursor = db.execute(
                         """
                         INSERT INTO motors (
                             job_number, customer_name, phone_number, motor_type, problem_description,
                             image_filename, estimated_cost, final_cost, advance_paid, payment_status,
                             status, date_added, deadline_date, deleted_at, created_at, updated_at,
-                            phone_uuid, source_device_id
+                            phone_uuid, source_device_id, batch_number
                         )
-                        VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
                         """,
                         (
                             unique_job_number(db, row["job_number"]),
@@ -3379,6 +3417,7 @@ def import_phone_backup(temp_path, manifest):
                             now,
                             row["uuid"],
                             source_device_id,
+                            batch_number,
                         ),
                     )
                     motor_id = cursor.lastrowid

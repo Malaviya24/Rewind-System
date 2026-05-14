@@ -22,6 +22,7 @@ function mapMotor(row: Record<string, unknown>): Motor {
     id: Number(row.id),
     uuid: String(row.uuid),
     jobNumber: String(row.job_number),
+    batchNumber: Number(row.batch_number) || 0,
     customerUuid: String(row.customer_uuid),
     customerName: String(row.customer_name),
     phoneNumber: String(row.phone_number),
@@ -96,14 +97,15 @@ export async function getDashboardSummary(range?: BackupRange): Promise<Dashboar
 
 export async function listMotors(query = ""): Promise<MotorWithMedia[]> {
   const search = `%${query.trim()}%`;
+  const searchPrefix = `${query.trim()}%`;
   const rows = await all<Record<string, unknown>>(
     `SELECT * FROM motors
-     WHERE ? = '%%' OR job_number LIKE ? OR customer_name LIKE ? OR phone_number LIKE ?
+     WHERE ? = '%%' OR job_number LIKE ? OR customer_name LIKE ? OR phone_number LIKE ? OR CAST(batch_number AS TEXT) LIKE ?
      ORDER BY
       CASE WHEN status NOT IN ('Completed', 'Delivered') AND deadline_date < date('now') THEN 0 ELSE 1 END,
       deadline_date ASC,
       id DESC`,
-    [search, search, search, search]
+    [search, search, search, search, searchPrefix]
   );
   const mediaRows = await all<Record<string, unknown>>("SELECT * FROM motor_media ORDER BY sort_order ASC, id ASC");
   const mediaMap = new Map<string, MotorMedia[]>();
@@ -226,16 +228,19 @@ export async function saveMotor(input: MotorInput, uuid?: string) {
     );
   } else {
     const sequence = (await first<{ count: number }>("SELECT COUNT(*) AS count FROM motors"))?.count || 0;
+    const batchRow = await first<{ next: number }>("SELECT COALESCE(MAX(batch_number), 0) + 1 AS next FROM motors");
+    const batchNumber = batchRow?.next || 1;
     uuid = createUuid();
     await run(
       `INSERT INTO motors (
-        uuid, job_number, customer_uuid, customer_name, phone_number, motor_type, problem_description,
+        uuid, job_number, batch_number, customer_uuid, customer_name, phone_number, motor_type, problem_description,
         estimated_cost, final_cost, advance_paid, payment_status, status, date_added, deadline_date,
         device_id, sync_status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', ?, ?)`,
       [
         uuid,
         createJobNumber(sequence + 1),
+        batchNumber,
         customerUuid,
         input.customerName,
         input.phoneNumber,
@@ -622,10 +627,10 @@ export async function importBackupData(data: BackupData): Promise<BackupImportSt
   for (const row of data.motors || []) {
     await run(
       `INSERT INTO motors (
-        uuid, job_number, customer_uuid, customer_name, phone_number, motor_type, problem_description,
+        uuid, job_number, batch_number, customer_uuid, customer_name, phone_number, motor_type, problem_description,
         estimated_cost, final_cost, advance_paid, payment_status, status, date_added, deadline_date,
         device_id, sync_status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?, ?)
       ON CONFLICT(uuid) DO UPDATE SET
         customer_uuid = excluded.customer_uuid,
         customer_name = excluded.customer_name,
@@ -638,11 +643,13 @@ export async function importBackupData(data: BackupData): Promise<BackupImportSt
         payment_status = excluded.payment_status,
         status = excluded.status,
         deadline_date = excluded.deadline_date,
+        batch_number = excluded.batch_number,
         sync_status = 'imported',
         updated_at = excluded.updated_at`,
       [
         String(row.uuid),
         String(row.job_number || ""),
+        Number(row.batch_number || 0),
         String(row.customer_uuid || ""),
         String(row.customer_name || ""),
         String(row.phone_number || ""),
@@ -661,6 +668,18 @@ export async function importBackupData(data: BackupData): Promise<BackupImportSt
       ]
     );
     stats.motors += 1;
+  }
+
+  // Backfill any imported motors missing batch_number
+  const motorsWithoutBatch = await all<{ uuid: string }>(
+    "SELECT uuid FROM motors WHERE batch_number = 0 OR batch_number IS NULL ORDER BY id"
+  );
+  for (const motor of motorsWithoutBatch) {
+    const maxRow = await first<{ next: number }>(
+      "SELECT COALESCE(MAX(batch_number), 0) + 1 AS next FROM motors"
+    );
+    const nextBatch = maxRow?.next || 1;
+    await run("UPDATE motors SET batch_number = ? WHERE uuid = ?", [nextBatch, motor.uuid]);
   }
 
   for (const row of data.motorMedia || []) {

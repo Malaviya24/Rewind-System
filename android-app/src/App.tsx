@@ -1091,6 +1091,7 @@ function MotorFormScreen({ motorUuid, onNavigate, onSaved }: { motorUuid?: strin
   const [advancePaid, setAdvancePaid] = useState("");
   const [deadlineDate, setDeadlineDate] = useState(addDaysIso(2));
   const [status, setStatus] = useState<RepairStatus>("Received");
+  const [batchNumber, setBatchNumber] = useState<number | null>(null);
 
   useEffect(() => {
     if (!motorUuid) {
@@ -1109,6 +1110,9 @@ function MotorFormScreen({ motorUuid, onNavigate, onSaved }: { motorUuid?: strin
       setAdvancePaid(String(motor.advancePaid));
       setDeadlineDate(motor.deadlineDate);
       setStatus(motor.status);
+      if (motor.batchNumber) {
+        setBatchNumber(motor.batchNumber);
+      }
     });
   }, [motorUuid]);
 
@@ -1141,6 +1145,9 @@ function MotorFormScreen({ motorUuid, onNavigate, onSaved }: { motorUuid?: strin
   return (
     <Screen activeTab="motors" eyebrow={motorUuid ? "Edit repair" : "New repair"} title={motorUuid ? "Edit Motor" : "Add Motor"} onNavigate={onNavigate}>
       <View style={styles.form}>
+        {motorUuid && batchNumber ? (
+          <Field label="Batch Number" value={String(batchNumber)} editable={false} />
+        ) : null}
         <Field label="Customer Name" value={customerName} onChangeText={setCustomerName} />
         <Field label="Phone" value={phoneNumber} onChangeText={(value) => setPhoneNumber(onlyPhoneDigits(value))} keyboardType="phone-pad" maxLength={10} />
         <Field label="Motor" value={motorType} onChangeText={setMotorType} />

@@ -1,6 +1,6 @@
 import { getDatabase } from "./database";
 
-export const schemaVersion = 2;
+export const schemaVersion = 3;
 
 export async function migrate() {
   const db = await getDatabase();
@@ -122,5 +122,17 @@ export async function migrate() {
   const salaryColumns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(worker_salary_payments)");
   if (!salaryColumns.some((column) => column.name === "payment_type")) {
     await db.execAsync("ALTER TABLE worker_salary_payments ADD COLUMN payment_type TEXT NOT NULL DEFAULT 'Paid';");
+  }
+
+  // Migration v3: Add batch_number column to motors
+  const motorColumns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(motors)");
+  if (!motorColumns.some((col) => col.name === "batch_number")) {
+    await db.execAsync("ALTER TABLE motors ADD COLUMN batch_number INTEGER;");
+    await db.execAsync(`
+      UPDATE motors SET batch_number = (
+        SELECT COUNT(*) FROM motors m2 WHERE m2.id <= motors.id
+      );
+    `);
+    await db.execAsync("CREATE UNIQUE INDEX IF NOT EXISTS idx_motors_batch_number ON motors(batch_number);");
   }
 }

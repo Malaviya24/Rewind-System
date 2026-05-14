@@ -21,6 +21,7 @@ export type Motor = {
   id?: number;
   uuid: string;
   jobNumber: string;
+  batchNumber: number;
   customerUuid: string;
   customerName: string;
   phoneNumber: string;

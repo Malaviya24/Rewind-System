@@ -7,6 +7,7 @@ import { spacing, typography } from "@/theme/theme";
 
 type NavScreen = "dashboard" | "motors" | "customers" | "workers" | "settings";
 const BOTTOM_NAV_HEIGHT = 66;
+const BOTTOM_NAV_MIN_OFFSET = 16;
 const BOTTOM_NAV_EXTRA_SCROLL_SPACE = spacing.xxl * 2;
 
 type Props = PropsWithChildren<{
@@ -20,7 +21,7 @@ type Props = PropsWithChildren<{
 export function Screen({ title, eyebrow, action, children, activeTab, onNavigate }: Props) {
   const insets = useSafeAreaInsets();
   const contentMotion = useRef(new Animated.Value(0)).current;
-  const bottomNavOffset = Math.max(spacing.lg, insets.bottom + spacing.sm);
+  const bottomNavOffset = Math.max(BOTTOM_NAV_MIN_OFFSET, insets.bottom + spacing.md);
   const contentBottomPadding = BOTTOM_NAV_HEIGHT + bottomNavOffset + BOTTOM_NAV_EXTRA_SCROLL_SPACE;
 
   useEffect(() => {

@@ -40,6 +40,12 @@
             <span>Motor, cost, and schedule</span>
         </div>
         <div class="form-grid">
+            {% if is_edit and motor.batch_number %}
+            <label>
+                <span>Batch Number</span>
+                <input type="text" value="{{ motor.batch_number }}" readonly disabled>
+            </label>
+            {% endif %}
             <label>
                 <span>Motor Type</span>
                 <input type="text" name="motor_type" value="{{ motor.motor_type }}" maxlength="255" required>
