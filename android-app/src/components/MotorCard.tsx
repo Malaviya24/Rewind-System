@@ -34,6 +34,11 @@ export function MotorCard({ motor, onOpen, onStatus, onPayment }: Props) {
 
   return (
     <View style={[styles.card, overdue && styles.overdueCard]}>
+      {motor.batchNumber ? (
+        <View style={styles.batchTag}>
+          <Text style={styles.batchTagText}>#{motor.batchNumber}</Text>
+        </View>
+      ) : null}
       <Pressable style={styles.preview} onPress={onOpen}>
         {preview?.mediaType === "image" ? (
           <Image source={{ uri: preview.uri }} style={styles.previewImage} />
@@ -149,6 +154,27 @@ const styles = StyleSheet.create({
   },
   overdueCard: {
     borderColor: colors.accent
+  },
+  batchTag: {
+    position: "absolute",
+    top: -14,
+    left: spacing.md,
+    zIndex: 10,
+    backgroundColor: colors.accentDeep,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 4
+  },
+  batchTagText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.5
   },
   cardTop: {
     gap: spacing.sm,

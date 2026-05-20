@@ -3195,7 +3195,8 @@ const styles = StyleSheet.create({
     alignItems: "stretch"
   },
   list: {
-    gap: spacing.lg
+    gap: spacing.lg,
+    paddingTop: spacing.lg
   },
   monthList: {
     gap: spacing.md
