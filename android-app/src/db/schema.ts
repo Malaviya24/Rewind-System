@@ -124,15 +124,20 @@ export async function migrate() {
     await db.execAsync("ALTER TABLE worker_salary_payments ADD COLUMN payment_type TEXT NOT NULL DEFAULT 'Paid';");
   }
 
-  // Migration v3: Add batch_number column to motors
+  // Migration v3: Add batch_number column to motors and backfill
   const motorColumns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(motors)");
   if (!motorColumns.some((col) => col.name === "batch_number")) {
     await db.execAsync("ALTER TABLE motors ADD COLUMN batch_number INTEGER;");
-    await db.execAsync(`
-      UPDATE motors SET batch_number = (
-        SELECT COUNT(*) FROM motors m2 WHERE m2.id <= motors.id
-      );
-    `);
-    await db.execAsync("CREATE UNIQUE INDEX IF NOT EXISTS idx_motors_batch_number ON motors(batch_number);");
   }
+  // Always backfill motors that are missing a batch_number (handles partial migrations)
+  const unbatched = await db.getAllAsync<{ id: number }>(
+    "SELECT id FROM motors WHERE batch_number IS NULL OR batch_number = 0 ORDER BY id ASC"
+  );
+  for (const row of unbatched) {
+    const maxRow = await db.getFirstAsync<{ next: number }>(
+      "SELECT COALESCE(MAX(batch_number), 0) + 1 AS next FROM motors"
+    );
+    await db.runAsync("UPDATE motors SET batch_number = ? WHERE id = ?", [maxRow?.next ?? 1, row.id]);
+  }
+  await db.execAsync("CREATE UNIQUE INDEX IF NOT EXISTS idx_motors_batch_number ON motors(batch_number);");
 }

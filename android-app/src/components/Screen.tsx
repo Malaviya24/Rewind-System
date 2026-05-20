@@ -1,5 +1,5 @@
 import { PropsWithChildren, ReactNode, useEffect, useRef } from "react";
-import { Animated, Easing, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/theme/colors";
@@ -37,8 +37,8 @@ export function Screen({ title, eyebrow, action, children, activeTab, onNavigate
   });
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={[styles.topNav, { paddingTop: insets.top > 0 ? 0 : (Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0) }]}>
+    <View style={styles.safe}>
+      <View style={[styles.topNav, { paddingTop: insets.top > 0 ? insets.top : (Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0) }]}>
         <NavItem icon="home" label="Home" active={activeTab === "dashboard"} onPress={() => onNavigate?.("dashboard")} />
         <NavItem icon="construct" label="Motors" active={activeTab === "motors"} onPress={() => onNavigate?.("motors")} />
         <NavItem icon="people" label="Customers" active={activeTab === "customers"} onPress={() => onNavigate?.("customers")} />
@@ -60,7 +60,7 @@ export function Screen({ title, eyebrow, action, children, activeTab, onNavigate
           {children}
         </Animated.View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
