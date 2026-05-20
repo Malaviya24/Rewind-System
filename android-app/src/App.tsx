@@ -769,7 +769,7 @@ function MotorsScreen({
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Job, name or phone"
+          placeholder="Search by name, phone or #number"
           placeholderTextColor={colors.muted}
           style={styles.motorSearchInput}
           autoCapitalize="none"
@@ -1125,21 +1125,25 @@ function MotorFormScreen({ motorUuid, onNavigate, onSaved }: { motorUuid?: strin
       Alert.alert("Invalid phone", "Enter exactly 10 digits for the mobile number.");
       return;
     }
-    const uuid = await saveMotor(
-      {
-        customerName,
-        phoneNumber,
-        motorType,
-        problemDescription,
-        estimatedCost: Number(estimatedCost || 0),
-        finalCost: Number(finalCost || 0),
-        advancePaid: Number(advancePaid || 0),
-        status,
-        deadlineDate
-      },
-      motorUuid
-    );
-    onSaved(uuid);
+    try {
+      const uuid = await saveMotor(
+        {
+          customerName,
+          phoneNumber,
+          motorType,
+          problemDescription,
+          estimatedCost: Number(estimatedCost || 0),
+          finalCost: Number(finalCost || 0),
+          advancePaid: Number(advancePaid || 0),
+          status,
+          deadlineDate
+        },
+        motorUuid
+      );
+      onSaved(uuid);
+    } catch (err) {
+      Alert.alert("Error", err instanceof Error ? err.message : "Failed to save motor. Please try again.");
+    }
   }
 
   return (
@@ -1152,9 +1156,9 @@ function MotorFormScreen({ motorUuid, onNavigate, onSaved }: { motorUuid?: strin
         <Field label="Phone" value={phoneNumber} onChangeText={(value) => setPhoneNumber(onlyPhoneDigits(value))} keyboardType="phone-pad" maxLength={10} />
         <Field label="Motor" value={motorType} onChangeText={setMotorType} />
         <Field label="Problem" value={problemDescription} onChangeText={setProblemDescription} multiline style={styles.multiline} />
-        <Field label="Estimated Cost" value={estimatedCost} onChangeText={setEstimatedCost} keyboardType="numeric" />
-        <Field label="Final Cost" value={finalCost} onChangeText={setFinalCost} keyboardType="numeric" />
-        <Field label="Advance Paid" value={advancePaid} onChangeText={setAdvancePaid} keyboardType="numeric" />
+        <Field label="Estimated Cost (optional)" value={estimatedCost} onChangeText={setEstimatedCost} keyboardType="numeric" />
+        <Field label="Final Cost (optional)" value={finalCost} onChangeText={setFinalCost} keyboardType="numeric" />
+        <Field label="Advance Paid (optional)" value={advancePaid} onChangeText={setAdvancePaid} keyboardType="numeric" />
         <DatePickerField label="Deadline" value={deadlineDate} mode="date" onChange={setDeadlineDate} />
         <SelectField label="Status" value={status} options={repairStatuses} onChange={setStatus} />
         <Button variant="primary" onPress={submit}>Save Motor</Button>

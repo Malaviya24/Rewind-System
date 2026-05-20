@@ -65,7 +65,7 @@ export function MotorCard({ motor, onOpen, onStatus, onPayment }: Props) {
           <Pressable onPress={onOpen}>
             <Text numberOfLines={1} ellipsizeMode="tail" style={styles.name}>{motor.customerName}</Text>
             <Text numberOfLines={2} style={styles.meta}>
-              {motor.jobNumber} - {motor.motorType}
+              #{motor.batchNumber} · {motor.motorType}
             </Text>
           </Pressable>
           <Text numberOfLines={2} style={styles.meta}>

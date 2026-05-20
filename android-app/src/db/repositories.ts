@@ -100,12 +100,12 @@ export async function listMotors(query = ""): Promise<MotorWithMedia[]> {
   const searchPrefix = `${query.trim()}%`;
   const rows = await all<Record<string, unknown>>(
     `SELECT * FROM motors
-     WHERE ? = '%%' OR job_number LIKE ? OR customer_name LIKE ? OR phone_number LIKE ? OR CAST(batch_number AS TEXT) LIKE ?
+     WHERE ? = '%%' OR customer_name LIKE ? OR phone_number LIKE ? OR CAST(batch_number AS TEXT) LIKE ?
      ORDER BY
       CASE WHEN status NOT IN ('Completed', 'Delivered') AND deadline_date < date('now') THEN 0 ELSE 1 END,
       deadline_date ASC,
       id DESC`,
-    [search, search, search, search, searchPrefix]
+    [search, search, search, searchPrefix]
   );
   const mediaRows = await all<Record<string, unknown>>("SELECT * FROM motor_media ORDER BY sort_order ASC, id ASC");
   const mediaMap = new Map<string, MotorMedia[]>();

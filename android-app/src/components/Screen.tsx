@@ -6,8 +6,6 @@ import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/theme";
 
 type NavScreen = "dashboard" | "motors" | "customers" | "workers" | "settings";
-const BOTTOM_NAV_HEIGHT = 66;
-const BOTTOM_NAV_MIN_OFFSET = 16;
 const BOTTOM_NAV_EXTRA_SCROLL_SPACE = spacing.xxl * 2;
 
 type Props = PropsWithChildren<{
@@ -21,8 +19,7 @@ type Props = PropsWithChildren<{
 export function Screen({ title, eyebrow, action, children, activeTab, onNavigate }: Props) {
   const insets = useSafeAreaInsets();
   const contentMotion = useRef(new Animated.Value(0)).current;
-  const bottomNavOffset = Math.max(BOTTOM_NAV_MIN_OFFSET, insets.bottom + spacing.md);
-  const contentBottomPadding = BOTTOM_NAV_HEIGHT + bottomNavOffset + BOTTOM_NAV_EXTRA_SCROLL_SPACE;
+  const contentBottomPadding = spacing.xxl * 2;
 
   useEffect(() => {
     contentMotion.setValue(0);
@@ -41,6 +38,13 @@ export function Screen({ title, eyebrow, action, children, activeTab, onNavigate
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={[styles.topNav, { paddingTop: insets.top > 0 ? 0 : (Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0) }]}>
+        <NavItem icon="home" label="Home" active={activeTab === "dashboard"} onPress={() => onNavigate?.("dashboard")} />
+        <NavItem icon="construct" label="Motors" active={activeTab === "motors"} onPress={() => onNavigate?.("motors")} />
+        <NavItem icon="people" label="Customers" active={activeTab === "customers"} onPress={() => onNavigate?.("customers")} />
+        <NavItem icon="calendar" label="Workers" active={activeTab === "workers"} onPress={() => onNavigate?.("workers")} />
+        <NavItem icon="settings" label="Settings" active={activeTab === "settings"} accent onPress={() => onNavigate?.("settings")} />
+      </View>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
@@ -56,13 +60,6 @@ export function Screen({ title, eyebrow, action, children, activeTab, onNavigate
           {children}
         </Animated.View>
       </ScrollView>
-      <View style={[styles.bottomNav, { bottom: bottomNavOffset }]}>
-        <NavItem icon="home" label="Home" active={activeTab === "dashboard"} onPress={() => onNavigate?.("dashboard")} />
-        <NavItem icon="construct" label="Motors" active={activeTab === "motors"} onPress={() => onNavigate?.("motors")} />
-        <NavItem icon="people" label="Customers" active={activeTab === "customers"} onPress={() => onNavigate?.("customers")} />
-        <NavItem icon="calendar" label="Workers" active={activeTab === "workers"} onPress={() => onNavigate?.("workers")} />
-        <NavItem icon="settings" label="Settings" active={activeTab === "settings"} accent onPress={() => onNavigate?.("settings")} />
-      </View>
     </SafeAreaView>
   );
 }
@@ -115,8 +112,21 @@ function NavItem({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.surface,
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0
+    backgroundColor: colors.surface
+  },
+  topNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.xs,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4
   },
   content: {
     paddingHorizontal: spacing.lg,
@@ -148,23 +158,7 @@ const styles = StyleSheet.create({
     flexShrink: 1
   },
   bottomNav: {
-    position: "absolute",
-    left: spacing.md,
-    right: spacing.md,
-    minHeight: BOTTOM_NAV_HEIGHT,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.72)",
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.78)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.xs,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    elevation: 8
+    display: "none"
   },
   navButton: {
     flex: 1,
