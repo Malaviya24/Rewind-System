@@ -6,7 +6,7 @@ import { colors } from "@/theme/colors";
 import { spacing, typography } from "@/theme/theme";
 
 type NavScreen = "dashboard" | "motors" | "customers" | "workers" | "settings";
-const BOTTOM_NAV_EXTRA_SCROLL_SPACE = spacing.xxl * 2;
+const BOTTOM_NAV_HEIGHT = 60;
 
 type Props = PropsWithChildren<{
   title: string;
@@ -19,7 +19,10 @@ type Props = PropsWithChildren<{
 export function Screen({ title, eyebrow, action, children, activeTab, onNavigate }: Props) {
   const insets = useSafeAreaInsets();
   const contentMotion = useRef(new Animated.Value(0)).current;
-  const contentBottomPadding = spacing.xxl * 2;
+  const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0;
+  const topPadding = insets.top > 0 ? insets.top : statusBarHeight;
+  const bottomBarPadding = Math.max(insets.bottom, 8);
+  const contentBottomPadding = BOTTOM_NAV_HEIGHT + bottomBarPadding + spacing.lg;
 
   useEffect(() => {
     contentMotion.setValue(0);
@@ -38,16 +41,9 @@ export function Screen({ title, eyebrow, action, children, activeTab, onNavigate
 
   return (
     <View style={styles.safe}>
-      <View style={[styles.topNav, { paddingTop: insets.top > 0 ? insets.top : (Platform.OS === "android" ? (StatusBar.currentHeight || 24) : 0) }]}>
-        <NavItem icon="home" label="Home" active={activeTab === "dashboard"} onPress={() => onNavigate?.("dashboard")} />
-        <NavItem icon="construct" label="Motors" active={activeTab === "motors"} onPress={() => onNavigate?.("motors")} />
-        <NavItem icon="people" label="Customers" active={activeTab === "customers"} onPress={() => onNavigate?.("customers")} />
-        <NavItem icon="calendar" label="Workers" active={activeTab === "workers"} onPress={() => onNavigate?.("workers")} />
-        <NavItem icon="settings" label="Settings" active={activeTab === "settings"} accent onPress={() => onNavigate?.("settings")} />
-      </View>
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPadding }]}
+        contentContainerStyle={[styles.content, { paddingTop: topPadding + spacing.md, paddingBottom: contentBottomPadding }]}
       >
         <Animated.View renderToHardwareTextureAndroid style={[styles.contentMotion, { transform: [{ translateY }] }]}>
           <View style={styles.header}>
@@ -60,6 +56,13 @@ export function Screen({ title, eyebrow, action, children, activeTab, onNavigate
           {children}
         </Animated.View>
       </ScrollView>
+      <View style={[styles.bottomBar, { paddingBottom: bottomBarPadding, height: BOTTOM_NAV_HEIGHT + bottomBarPadding }]}>
+        <NavItem icon="home" label="Home" active={activeTab === "dashboard"} onPress={() => onNavigate?.("dashboard")} />
+        <NavItem icon="construct" label="Motors" active={activeTab === "motors"} onPress={() => onNavigate?.("motors")} />
+        <NavItem icon="people" label="Customers" active={activeTab === "customers"} onPress={() => onNavigate?.("customers")} />
+        <NavItem icon="calendar" label="Workers" active={activeTab === "workers"} onPress={() => onNavigate?.("workers")} />
+        <NavItem icon="settings" label="Settings" active={activeTab === "settings"} onPress={() => onNavigate?.("settings")} />
+      </View>
     </View>
   );
 }
@@ -68,43 +71,19 @@ function NavItem({
   icon,
   label,
   active,
-  accent,
   onPress
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   active?: boolean;
-  accent?: boolean;
   onPress: () => void;
 }) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  function pressIn() {
-    Animated.spring(scale, {
-      toValue: 0.92,
-      useNativeDriver: true,
-      speed: 28,
-      bounciness: 8
-    }).start();
-  }
-
-  function pressOut() {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 24,
-      bounciness: 10
-    }).start();
-  }
-
   return (
-    <Pressable onPressIn={pressIn} onPressOut={pressOut} style={styles.navButton} onPress={onPress} hitSlop={8}>
-      <Animated.View style={[styles.navBubble, active && styles.navBubbleActive, { transform: [{ scale }] }]}>
-        <Ionicons name={icon} size={17} color={active ? colors.white : accent ? colors.accentDeep : colors.muted} />
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[styles.navItem, active && styles.navItemActive, accent && !active && styles.navAccent]}>
-          {label}
-        </Text>
-      </Animated.View>
+    <Pressable style={styles.navButton} onPress={onPress} hitSlop={4}>
+      <Ionicons name={icon} size={24} color={active ? colors.accent : colors.muted} />
+      <Text numberOfLines={1} style={[styles.navLabel, active && styles.navLabelActive]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -114,23 +93,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface
   },
-  topNav: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingHorizontal: spacing.xs,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4
-  },
   content: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md
+    paddingHorizontal: spacing.lg
   },
   contentMotion: {
     gap: spacing.lg,
@@ -157,38 +121,34 @@ const styles = StyleSheet.create({
     ...typography.title,
     flexShrink: 1
   },
-  bottomNav: {
-    display: "none"
+  bottomBar: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-around",
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.xs,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 8
   },
   navButton: {
     flex: 1,
-    minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 2
-  },
-  navBubble: {
-    minHeight: 46,
-    minWidth: 56,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
+    paddingVertical: spacing.xs,
     gap: 2
   },
-  navBubbleActive: {
-    backgroundColor: colors.accent
-  },
-  navItem: {
+  navLabel: {
     color: colors.muted,
-    fontSize: 9,
-    fontWeight: "900",
-    textTransform: "uppercase"
+    fontSize: 10,
+    fontWeight: "700"
   },
-  navItemActive: {
-    color: colors.white
-  },
-  navAccent: {
-    color: colors.accentDeep
+  navLabelActive: {
+    color: colors.accent,
+    fontWeight: "900"
   }
 });

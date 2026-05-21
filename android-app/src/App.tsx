@@ -450,7 +450,7 @@ function DashboardMotorRow({ motor, onOpen }: { motor: MotorWithMedia; onOpen: (
       )}
       <View style={styles.body}>
         <Text numberOfLines={1} ellipsizeMode="tail" style={styles.name}>{motor.customerName}</Text>
-        <Text numberOfLines={2} style={styles.mutedText}>{motor.jobNumber} - {motor.motorType}</Text>
+        <Text numberOfLines={2} style={styles.mutedText}>{motor.batchNumber > 0 ? `Reference No. ${motor.batchNumber} · ` : ""}{motor.motorType}</Text>
         <Text numberOfLines={1} style={styles.panelHint}>{displayDate(motor.deadlineDate)} - {motor.status} - {motor.paymentStatus}</Text>
       </View>
       <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.66} style={styles.balance}>{money(balance)}</Text>
@@ -769,7 +769,7 @@ function MotorsScreen({
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search by name, phone or #number"
+          placeholder="Search by name, phone or reference number"
           placeholderTextColor={colors.muted}
           style={styles.motorSearchInput}
           autoCapitalize="none"
@@ -922,7 +922,7 @@ function MotorDetailScreen({
   const customerPhone = normalizePhone(motor.phoneNumber);
 
   return (
-    <Screen activeTab="motors" eyebrow={motor.jobNumber} title={motor.customerName} onNavigate={onNavigate} action={<Button onPress={onEdit}>Edit</Button>}>
+    <Screen activeTab="motors" eyebrow={motor.batchNumber > 0 ? `Reference No. ${motor.batchNumber}` : "Repair details"} title={motor.customerName} onNavigate={onNavigate} action={<Button onPress={onEdit}>Edit</Button>}>
       <PinModal
         visible={deletePinOpen}
         title="Delete motor"
@@ -962,7 +962,7 @@ function MotorDetailScreen({
             {overdue ? <Badge label="Overdue" /> : null}
           </View>
           <Text numberOfLines={2} style={styles.jobTitle}>{motor.motorType}</Text>
-          <Text numberOfLines={1} style={styles.panelHint}>{motor.jobNumber} - Due {displayDate(motor.deadlineDate)}</Text>
+          <Text numberOfLines={1} style={styles.panelHint}>{motor.batchNumber > 0 ? `Reference No. ${motor.batchNumber} · ` : ""}Due {displayDate(motor.deadlineDate)}</Text>
         </View>
       </View>
       <DetailSection title="Customer">
@@ -974,7 +974,7 @@ function MotorDetailScreen({
         </View>
       </DetailSection>
       <DetailSection title="Motor details">
-        <DetailRow icon="receipt" label="Job Number" value={motor.jobNumber} />
+        {motor.batchNumber > 0 ? <DetailRow icon="pricetag" label="Reference Number" value={String(motor.batchNumber)} /> : null}
         <DetailRow icon="construct" label="Motor Type" value={motor.motorType} />
         <DetailRow icon="time" label="Deadline" value={displayDate(motor.deadlineDate)} />
         <DetailRow icon="flag" label="Status" value={motor.status} />
@@ -1150,7 +1150,7 @@ function MotorFormScreen({ motorUuid, onNavigate, onSaved }: { motorUuid?: strin
     <Screen activeTab="motors" eyebrow={motorUuid ? "Edit repair" : "New repair"} title={motorUuid ? "Edit Motor" : "Add Motor"} onNavigate={onNavigate}>
       <View style={styles.form}>
         {motorUuid && batchNumber ? (
-          <Field label="Batch Number" value={String(batchNumber)} editable={false} />
+          <Field label="Reference Number" value={String(batchNumber)} editable={false} />
         ) : null}
         <Field label="Customer Name" value={customerName} onChangeText={setCustomerName} />
         <Field label="Phone" value={phoneNumber} onChangeText={(value) => setPhoneNumber(onlyPhoneDigits(value))} keyboardType="phone-pad" maxLength={10} />
@@ -2324,8 +2324,8 @@ async function refreshDeadlineNotifications() {
         title: motor.deadlineDate < todayIso() ? "Motor overdue" : "Motor deadline near",
         body:
           motor.deadlineDate < todayIso()
-            ? `${motor.jobNumber} - ${motor.motorType} is overdue.`
-            : `${motor.jobNumber} - ${motor.motorType} due tomorrow.`,
+            ? `Reference No. ${motor.batchNumber} - ${motor.motorType} is overdue.`
+            : `Reference No. ${motor.batchNumber} - ${motor.motorType} due tomorrow.`,
         data: { motorUuid: motor.uuid }
       },
       trigger: {
