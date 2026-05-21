@@ -15,6 +15,8 @@ import { Screen } from "@/components/Screen";
 import { SelectField } from "@/components/SelectField";
 import { StatTile } from "@/components/StatTile";
 import { importLatestBackupFromPickedFolder, sharePhoneBackup } from "@/backup/backupService";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { useAppDatabase } from "@/db/useAppDatabase";
 import {
   attachMotorMedia,
@@ -1228,9 +1230,48 @@ function MotorFormScreen({ motorUuid, onNavigate, onSaved }: { motorUuid?: strin
 function CustomersScreen({ onNavigate, refreshKey, onOpen }: { onNavigate: (screen: ScreenName) => void; refreshKey: number; onOpen: (uuid: string) => void }) {
   const [customers, setCustomers] = useState<Record<string, unknown>[]>([]);
   const [query, setQuery] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+
   useEffect(() => {
     listCustomers(query).then(setCustomers);
   }, [query, refreshKey]);
+
+  async function exportContacts() {
+    try {
+      setExportBusy(true);
+      // Fetch ALL customers (not just filtered ones)
+      const all = await listCustomers("");
+      if (!all.length) {
+        Alert.alert("No customers", "There are no customers to export.");
+        return;
+      }
+      // Build VCF content
+      const vcf = all.map((c) => {
+        const name = String(c.name || "").trim();
+        const phone = String(c.phone_number || "").trim();
+        const tel = phone.length === 10 ? `+91${phone}` : phone;
+        return `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL;TYPE=CELL:${tel}\nEND:VCARD`;
+      }).join("\n");
+      // Write to a temp file
+      const path = `${FileSystem.cacheDirectory}customers.vcf`;
+      await FileSystem.writeAsStringAsync(path, vcf, { encoding: FileSystem.EncodingType.UTF8 });
+      // Share it
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(path, {
+          mimeType: "text/vcard",
+          dialogTitle: "Save Customers to Contacts",
+          UTI: "public.vcard"
+        });
+      } else {
+        Alert.alert("Sharing not available", "Cannot share files on this device.");
+      }
+    } catch (err) {
+      Alert.alert("Export failed", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setExportBusy(false);
+    }
+  }
 
   return (
     <Screen activeTab="customers" eyebrow="Customer desk" title="Customers" onNavigate={onNavigate}>
@@ -1246,6 +1287,9 @@ function CustomersScreen({ onNavigate, refreshKey, onOpen }: { onNavigate: (scre
           keyboardType="default"
         />
       </View>
+      <Button variant="ghost" onPress={exportContacts} disabled={exportBusy}>
+        {exportBusy ? "Generating..." : `Save All Customers to Contacts (${customers.length})`}
+      </Button>
       <View style={styles.list}>
         {customers.length ? (
           customers.map((customer) => (
