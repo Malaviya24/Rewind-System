@@ -35,6 +35,7 @@ import {
   saveShopSettings,
   saveWorkerSalaryPayment,
   saveWorker,
+  updateMotorCosts,
   updateMotorPayment,
   updateMotorStatus
 } from "@/db/repositories";
@@ -839,6 +840,36 @@ function MotorDetailScreen({
   const [deletePinOpen, setDeletePinOpen] = useState(false);
   const [deletePin, setDeletePin] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [costEditField, setCostEditField] = useState<null | "finalCost" | "advancePaid">(null);
+  const [costEditValue, setCostEditValue] = useState("");
+  const [costEditBusy, setCostEditBusy] = useState(false);
+
+  function openCostEditor(field: "finalCost" | "advancePaid") {
+    if (!motor) return;
+    setCostEditField(field);
+    setCostEditValue(field === "finalCost" ? String(motor.finalCost || "") : String(motor.advancePaid || ""));
+  }
+
+  async function saveCost() {
+    if (!motor || !costEditField) return;
+    const value = Number(costEditValue || 0);
+    if (Number.isNaN(value) || value < 0) {
+      Alert.alert("Invalid amount", "Please enter a valid number.");
+      return;
+    }
+    try {
+      setCostEditBusy(true);
+      await updateMotorCosts(motor.uuid, { [costEditField]: value });
+      setCostEditField(null);
+      setCostEditValue("");
+      await load();
+      onChanged();
+    } catch (err) {
+      Alert.alert("Save failed", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setCostEditBusy(false);
+    }
+  }
 
   async function load() {
     setMotor(await getMotor(motorUuid));
@@ -937,6 +968,27 @@ function MotorDetailScreen({
         }}
         onConfirm={confirmDelete}
       />
+      <Modal visible={costEditField !== null} transparent animationType="fade" onRequestClose={() => setCostEditField(null)}>
+        <View style={styles.costModalBackdrop}>
+          <View style={styles.costModalCard}>
+            <Text style={styles.costModalTitle}>{costEditField === "finalCost" ? "Final Cost" : "Advance Paid"}</Text>
+            <Text style={styles.costModalHint}>Enter the amount in rupees.</Text>
+            <TextInput
+              value={costEditValue}
+              onChangeText={setCostEditValue}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor={colors.muted}
+              style={styles.costModalInput}
+              autoFocus
+            />
+            <View style={styles.costModalRow}>
+              <Button variant="ghost" onPress={() => setCostEditField(null)}>Cancel</Button>
+              <Button variant="primary" onPress={saveCost} disabled={costEditBusy}>{costEditBusy ? "Saving..." : "Save"}</Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <View style={[styles.jobHeaderCard, overdue && styles.jobHeaderOverdue]}>
         <Pressable style={styles.jobHero} onPress={() => openMedia(0)}>
           {motor.media[0]?.mediaType === "image" ? (
@@ -986,8 +1038,8 @@ function MotorDetailScreen({
       <DetailSection title="Payment">
         <View style={styles.paymentGrid}>
           <PaymentTile label="Estimated" value={money(motor.estimatedCost)} />
-          <PaymentTile label="Final" value={money(motor.finalCost)} />
-          <PaymentTile label="Advance/Paid" value={money(motor.advancePaid)} tone="success" />
+          <PaymentTile label="Final" value={money(motor.finalCost)} onEdit={() => openCostEditor("finalCost")} isEmpty={!motor.finalCost} />
+          <PaymentTile label="Advance/Paid" value={money(motor.advancePaid)} tone="success" onEdit={() => openCostEditor("advancePaid")} isEmpty={!motor.advancePaid} />
           <PaymentTile label="Balance" value={money(balance)} tone={balance > 0 ? "danger" : "success"} />
         </View>
         <Text style={styles.panelHint}>Repair amount: {money(repairTotal)}</Text>
@@ -1051,11 +1103,17 @@ function DetailRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMa
   );
 }
 
-function PaymentTile({ label, value, tone }: { label: string; value: string; tone?: "success" | "danger" }) {
+function PaymentTile({ label, value, tone, onEdit, isEmpty }: { label: string; value: string; tone?: "success" | "danger"; onEdit?: () => void; isEmpty?: boolean }) {
   return (
     <View style={[styles.paymentTile, tone === "success" && styles.paymentTileSuccess, tone === "danger" && styles.paymentTileDanger]}>
       <Text numberOfLines={1} style={styles.infoLabel}>{label}</Text>
       <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.64} style={styles.paymentTileValue}>{value}</Text>
+      {onEdit ? (
+        <Pressable onPress={onEdit} style={styles.paymentTileEdit} hitSlop={6}>
+          <Ionicons name={isEmpty ? "add-circle" : "pencil"} size={14} color={colors.accent} />
+          <Text style={styles.paymentTileEditText}>{isEmpty ? "Add" : "Edit"}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -3658,6 +3716,64 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 17,
     fontWeight: "900"
+  },
+  paymentTileEdit: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    alignSelf: "flex-start",
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  paymentTileEditText: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  costModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg
+  },
+  costModalCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: spacing.lg,
+    gap: spacing.md
+  },
+  costModalTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: colors.ink
+  },
+  costModalHint: {
+    color: colors.muted,
+    fontSize: 13
+  },
+  costModalInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.ink,
+    backgroundColor: colors.surface
+  },
+  costModalRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm
   },
   mediaStrip: {
     minHeight: 52,

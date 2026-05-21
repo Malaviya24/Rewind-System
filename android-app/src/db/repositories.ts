@@ -284,6 +284,25 @@ export async function updateMotorPayment(uuid: string, payment: PaymentStatus) {
   await refreshCustomerRollup(motor.customerUuid);
 }
 
+export async function updateMotorCosts(
+  uuid: string,
+  costs: { finalCost?: number; advancePaid?: number; estimatedCost?: number }
+) {
+  const motor = await getMotor(uuid);
+  if (!motor) {
+    return;
+  }
+  const finalCost = costs.finalCost ?? motor.finalCost;
+  const advancePaid = costs.advancePaid ?? motor.advancePaid;
+  const estimatedCost = costs.estimatedCost ?? motor.estimatedCost;
+  const calculated = paymentStatus(finalCost, estimatedCost, advancePaid);
+  await run(
+    "UPDATE motors SET estimated_cost = ?, final_cost = ?, advance_paid = ?, payment_status = ?, sync_status = 'local', updated_at = ? WHERE uuid = ?",
+    [estimatedCost, finalCost, advancePaid, calculated, nowIso(), uuid]
+  );
+  await refreshCustomerRollup(motor.customerUuid);
+}
+
 export async function deleteMotor(uuid: string) {
   const motor = await getMotor(uuid);
   if (!motor) {
